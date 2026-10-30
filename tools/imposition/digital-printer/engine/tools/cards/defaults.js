@@ -26,6 +26,9 @@ export function cardStartState(printer, saved) {
     if (typeof saved.marks === 'boolean') base.marks = saved.marks;
     if (saved.copies > 0) base.copies = saved.copies;
     if (['auto', 'mirror', 'stretch', 'off'].includes(saved.makeBleed)) base.makeBleed = saved.makeBleed;
+    if (['rect', 'rounded', 'ellipse'].includes(saved.shape)) base.shape = saved.shape;
+    if (saved.radius >= 0) base.radius = saved.radius;
+    if (['guillotine', 'plotter'].includes(saved.cutter)) base.cutter = saved.cutter;
     overrides = { ...(saved.overrides || {}) };
   }
   return { base, overrides };
@@ -39,6 +42,9 @@ export function makeSavedDefault(base, overrides) {
     marks: base.marks,
     copies: base.copies,
     makeBleed: base.makeBleed,
+    shape: base.shape,
+    radius: base.radius,
+    cutter: base.cutter,
     overrides: { ...overrides },
   };
 }

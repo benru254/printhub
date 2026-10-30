@@ -10,6 +10,7 @@ import { planCards } from '../cards/plan.js';
 import { sheetsNeeded, stackRanges } from './order.js';
 import {
   NUMBERING_DEFAULTS, resolveDigits, formatNumber, numberBoxMm, defaultPosition, secondPosition, clampPosition,
+  copyNamePosition,
 } from './numbering.js';
 
 export function defaultMode(geometry) {
@@ -49,6 +50,10 @@ export function planCutStack({ geometry, base, overrides = {}, customSheets = []
 
   const perBook = Math.max(0, Math.floor(n.perBook) || 0);
 
+  // Copy names (ORIGINAL / DUPLICATE / TRIPLICATE) only make sense with 2 or 3 copies.
+  const copyNames = m === 'number' && parts > 1 && !!n.copyNames;
+  const names = NUMBERING_DEFAULTS.copyNameList.map((d, i) => String((n.copyNameList || [])[i] ?? d).trim().slice(0, 20));
+
   return {
     ...cards,
     tool: 'cutstack',
@@ -71,6 +76,9 @@ export function planCutStack({ geometry, base, overrides = {}, customSheets = []
       first: fmt(0),
       last: sample,
       format: fmt,
+      copyNames,
+      copyNameList: names,
+      copyNameAt: copyNamePosition(positions[0], box, cards.out),
     },
     books: perBook > 0 ? { perBook, count: Math.ceil(total / perBook), whole: total % perBook === 0 } : null,
   };

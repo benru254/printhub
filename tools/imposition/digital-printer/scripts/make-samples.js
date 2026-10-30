@@ -28,6 +28,9 @@ await save('receipt-a6.pdf', await receipt());
 // 12 different tickets, one per page (for "Pages in order").
 await save('tickets-12-pages.pdf', await tickets(12));
 
+// 10-page A5 booklet with 3 mm bleed (not a multiple of 4: 2 blank pages get added).
+await save('booklet-a5-10-pages.pdf', await bookletPdf(10));
+
 // ---- Pictures ----
 // Front + back business card pictures saved at 300 dpi (85 x 55 mm = 1004 x 650 px).
 await save('picture-card-front.png', png(1004, 650, cardPixels([20, 110, 180]), 300));
@@ -95,6 +98,24 @@ async function tickets(n) {
     const page = doc.addPage([mmToPt(100), mmToPt(50)]);
     page.drawRectangle({ x: 0, y: 0, width: page.getWidth(), height: page.getHeight(), color: rgb(0.98, 0.92, 0.75) });
     page.drawText(`TICKET ${i}`, { x: 30, y: 60, size: 28, font, color: rgb(0.5, 0.1, 0.1) });
+  }
+  return doc.save();
+}
+
+async function bookletPdf(pages) {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  const b = mmToPt(3);
+  for (let i = 1; i <= pages; i++) {
+    const W = mmToPt(148) + 2 * b;
+    const H = mmToPt(210) + 2 * b;
+    const page = doc.addPage([W, H]);
+    const cover = i === 1 || i === pages;
+    page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: cover ? rgb(0.1, 0.35, 0.6) : rgb(0.97, 0.97, 0.94) });
+    page.drawText(i === 1 ? 'FRONT COVER' : i === pages ? 'BACK COVER' : `Page ${i}`, { x: b + 30, y: H - b - 60, size: 18, font, color: cover ? rgb(1, 1, 1) : rgb(0.2, 0.2, 0.2) });
+    page.drawText(String(i), { x: W / 2 - 30, y: H / 2 - 40, size: 90, font, color: cover ? rgb(1, 1, 1) : rgb(0.75, 0.75, 0.75) });
+    page.node.set(PDFName.of('TrimBox'), box(doc, b, b, W - b, H - b));
+    page.node.set(PDFName.of('BleedBox'), box(doc, 0, 0, W, H));
   }
   return doc.save();
 }

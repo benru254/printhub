@@ -446,3 +446,12 @@ button { -webkit-tap-highlight-color: transparent; }
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
 }
 .stack-chip strong { color: var(--accent); margin-right: 4px; }
+
+/* ---------- Part 6: shapes, cut lines, booklet ---------- */
+.cut-files { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.wide-select { width: 100%; }
+.booklet-pages { margin: 0 0 8px; color: var(--text); }
+.reader { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; padding: 14px; border-radius: var(--radius); background: #2a3038; }
+.reader-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.reader-canvas { width: 100%; height: auto; display: block; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.45)); }
+.reader-label { color: var(--muted); font-size: 12.5px; }

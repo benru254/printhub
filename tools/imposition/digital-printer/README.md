@@ -9,6 +9,9 @@ Print size / resizing (Fill, Fit, Stretch), sheets A6–A2 + Letter + custom siz
 **Part 5:** Numbered books & tickets (cut & stack): numbering (start, count, digits, prefix, colour, style, drag to place, ticket stubs),
 books of 25/50/100, duplicate/triplicate NCR copies (in sets or by colour), "pages in order" for many-page files, step-by-step stacking guide.
 Also: smart gap — without bleed, pieces share cut lines when that fits more.
+**Part 6:** Copy names (ORIGINAL / DUPLICATE / TRIPLICATE) on NCR copies; shapes (rounded corners, circle/oval) with
+guillotine or sticker cutter (CutContour spot colour in the PDF + SVG cut file); Booklet tool (saddle stitch: fold order,
+blank pages, creep from paper weight, best sheet, shrink to fit, reader view, fold marks).
 
 ## Folders
 
@@ -17,6 +20,7 @@ Also: smart gap — without bleed, pieces share cut lines when that fits more.
 | `engine/core/` | Shared by every tool: sizes, printers, reading PDFs, pictures → PDF, fitting a design to a size, cut marks, safe zone, margin test sheet. |
 | `engine/tools/cards/` | The Cards tool: layout, settings, plan, tips, PDF builder. |
 | `engine/tools/cutstack/` | Numbered books & tickets: cut & stack order, numbering, plan, tips, PDF builder. |
+| `engine/tools/booklet/` | Booklets: saddle-stitch order, plan (sheet, shrink, creep), tips, PDF builder. |
 | `engine/tests/` | Tests for the engine (`npm test`). |
 | `frontend/src/screens/` | Start screen and "Your file" screen. |
 | `frontend/src/tools/` | One folder per tool. `registry.js` lists all tools (ready / soon). |

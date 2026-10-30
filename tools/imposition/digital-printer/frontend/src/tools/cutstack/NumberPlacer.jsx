@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { clampPosition, withSecondNumber } from '@engine';
+import { clampPosition, withSecondNumber, copyNamePosition, COPY_NAME_SIZE } from '@engine';
 import { useWidth } from '../../hooks/useWidth.js';
 import { drawPiece } from '../cards/drawPiece.js';
 import { drawNumber } from './numberText.js';
@@ -59,6 +59,11 @@ export default function NumberPlacer({ plan, render, onPositions }) {
     ctx.strokeStyle = SAFE_COLOR;
     ctx.strokeRect(x0 + s, y0 + s, out.w * k - 2 * s, out.h * k - 2 * s);
     ctx.restore();
+
+    if (numbering.copyNames && positions.length) {
+      const at = copyNamePosition(positions[0], box, out);
+      drawNumber(ctx, numbering.copyNameList[0], x0 + at.x * k, y0 + at.y * k, k, { ...numbering, size: COPY_NAME_SIZE, font: 'bold' });
+    }
 
     positions.forEach((pos, i) => {
       const cx = x0 + pos.x * k;

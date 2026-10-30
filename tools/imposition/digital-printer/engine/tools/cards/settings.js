@@ -13,6 +13,9 @@ export const CARD_DEFAULTS = {
   size: null, // null = original size, or { w, h } in mm
   fitMode: 'fill', // used when the new size has a different shape
   makeBleed: 'auto', // 'auto' | 'mirror' | 'stretch' | 'off'  (only used when the file has no bleed)
+  shape: 'rect', // 'rect' | 'rounded' | 'ellipse'
+  radius: 3, // corner radius in mm (rounded shape)
+  cutter: 'guillotine', // 'guillotine' (straight cuts, cut marks) | 'plotter' (sticker cutter, cut lines)
 };
 
 export const STANDARD_BLEED = 3; // mm, the print industry standard

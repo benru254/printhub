@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { fmtSize, fmtMm } from '@engine';
+import { fmtSize, fmtMm, shapeOutline, outlineToCanvas } from '@engine';
 import { useWidth } from '../../hooks/useWidth.js';
 import { drawPiece } from './drawPiece.js';
 
@@ -48,15 +48,23 @@ export default function FinishedPreview({ plan, renders, copies, unit, safety })
       const x = row ? x0 + i * (pw + pad) : x0;
       const y = row ? pad : pad + i * (ph + labelH + pad);
 
-      // Paper with a soft shadow, then the design cut at the finished size.
+      // Paper with a soft shadow, then the design cut at the finished size and shape.
+      const sh = plan.shape || { shape: 'rect' };
+      const outline = shapeOutline({ shape: sh.shape, w: out.w, h: out.h, radius: sh.radius });
+      const toPx = (mx, my) => [x + mx * k, y + my * k];
       ctx.save();
       ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
       ctx.shadowBlur = 14;
       ctx.shadowOffsetY = 4;
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(x, y, pw, ph);
+      outlineToCanvas(ctx, outline, toPx);
+      ctx.fill();
       ctx.restore();
+      ctx.save();
+      outlineToCanvas(ctx, outline, toPx);
+      ctx.clip();
       drawPiece(ctx, renders[i], fits[i], page, x, y, k);
+      ctx.restore();
 
       // Safe line: keep text and logos inside it.
       const s = safe * k;

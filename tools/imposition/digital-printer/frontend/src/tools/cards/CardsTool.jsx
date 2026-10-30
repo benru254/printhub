@@ -15,6 +15,7 @@ import AdvancedPanel from './AdvancedPanel.jsx';
 import SheetPreview from './SheetPreview.jsx';
 import FinishedPreview from './FinishedPreview.jsx';
 import BleedCard from './BleedCard.jsx';
+import ShapeCard from './ShapeCard.jsx';
 import { useSafeZone } from './useSafeZone.js';
 import { previewBleedCanvases, printBleedArt } from './bleedArt.js';
 
@@ -101,7 +102,8 @@ export default function CardsTool({
   // Change settings. Size changes show the finished pieces; sheet changes show the sheet.
   function update(patch) {
     setBase({ ...safeBase, ...patch });
-    if ('size' in patch || 'fitMode' in patch) setView('finished');
+    if ('size' in patch || 'fitMode' in patch || 'shape' in patch || 'radius' in patch) setView('finished');
+    if ('cutter' in patch) setView('sheet');
     if ('sheet' in patch || 'orientation' in patch || 'marks' in patch || 'makeBleed' in patch) setView('sheet');
   }
 
@@ -218,6 +220,8 @@ export default function CardsTool({
           <PrintSizeCard plan={plan} base={safeBase} onChange={update} imageInfo={imageInfo} />
 
           <BleedCard plan={plan} base={safeBase} onChange={update} checking={!safety} />
+
+          <ShapeCard plan={plan} base={safeBase} onChange={update} fileName={job.name} />
 
           <div className="card copies">
             <label className="field-label" htmlFor="copies">How many {product.unit}?</label>
