@@ -26,7 +26,9 @@ export function cardStartState(printer, saved) {
     if (typeof saved.marks === 'boolean') base.marks = saved.marks;
     if (saved.copies > 0) base.copies = saved.copies;
     if (['auto', 'mirror', 'stretch', 'off'].includes(saved.makeBleed)) base.makeBleed = saved.makeBleed;
-    if (['rect', 'rounded', 'ellipse'].includes(saved.shape)) base.shape = saved.shape;
+    if (['rect', 'rounded', 'ellipse', 'contour'].includes(saved.shape)) base.shape = saved.shape;
+    if (saved.contourOffset >= 0) base.contourOffset = saved.contourOffset;
+    if (typeof saved.contourIgnoreWhite === 'boolean') base.contourIgnoreWhite = saved.contourIgnoreWhite;
     if (saved.radius >= 0) base.radius = saved.radius;
     if (['guillotine', 'plotter'].includes(saved.cutter)) base.cutter = saved.cutter;
     overrides = { ...(saved.overrides || {}) };
@@ -45,6 +47,8 @@ export function makeSavedDefault(base, overrides) {
     shape: base.shape,
     radius: base.radius,
     cutter: base.cutter,
+    contourOffset: base.contourOffset,
+    contourIgnoreWhite: base.contourIgnoreWhite,
     overrides: { ...overrides },
   };
 }

@@ -455,3 +455,11 @@ button { -webkit-tap-highlight-color: transparent; }
 .reader-item { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .reader-canvas { width: 100%; height: auto; display: block; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.45)); }
 .reader-label { color: var(--muted); font-size: 12.5px; }
+.contour-status { font-weight: 700; color: var(--good); margin-top: 6px; }
+
+/* ---------- Part 7: glued books ---------- */
+.num:disabled { opacity: 0.55; background: var(--bg); color: var(--muted); }
+.cover-caption { text-align: center; margin-top: 8px; color: var(--muted); }
+.cover-empty { padding: 18px; border-radius: var(--radius); background: var(--panel); color: var(--muted); }
+.wide-btn { width: 100%; padding: 14px; border-radius: var(--radius); font-size: 16px; }
+.ghost-btn:disabled { color: var(--muted); border-color: var(--line); background: transparent; cursor: default; }

@@ -16,6 +16,8 @@ export const CARD_DEFAULTS = {
   shape: 'rect', // 'rect' | 'rounded' | 'ellipse'
   radius: 3, // corner radius in mm (rounded shape)
   cutter: 'guillotine', // 'guillotine' (straight cuts, cut marks) | 'plotter' (sticker cutter, cut lines)
+  contourOffset: 2, // mm of white border around the design (shape 'contour')
+  contourIgnoreWhite: true, // white background counts as empty (shape 'contour')
 };
 
 export const STANDARD_BLEED = 3; // mm, the print industry standard

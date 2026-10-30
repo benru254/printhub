@@ -16,6 +16,12 @@ export const TOOLS = [
     status: 'ready',
   },
   {
+    id: 'perfectbound',
+    name: 'Book (glued spine)',
+    desc: 'Thick books and reports: inside pages in signatures, plus a wrap-around cover with the right spine width.',
+    status: 'ready',
+  },
+  {
     id: 'cutstack',
     name: 'Numbered books & tickets',
     desc: 'Add numbers to receipts and tickets, or keep many pages in order after cutting (cut & stack).',

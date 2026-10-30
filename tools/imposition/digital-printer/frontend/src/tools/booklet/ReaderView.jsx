@@ -1,24 +1,33 @@
 import { useEffect, useRef } from 'react';
 import { readerSpreads } from '@engine';
 
-// The booklet as the reader sees it: cover, then the open spreads, then the back cover.
-export default function ReaderView({ plan, pdf }) {
-  const spreads = readerSpreads(plan.pages);
+// The booklet (or book) as the reader sees it: cover, then the open spreads, then the back cover.
+// Default: a stapled booklet. Pass `items` to show something else:
+//   items = [{ sources: [left, right], label }], where each side is a file page index,
+//   null = blank page, undefined = nothing there (the outside of a cover).
+export default function ReaderView({ plan, pdf, items }) {
+  const list = items || bookletItems(plan);
   return (
     <div className="reader">
-      {spreads.map((sp, i) => (
+      {list.map((it, i) => (
         <div key={i} className="reader-item">
-          <Spread plan={plan} pdf={pdf} positions={sp} />
-          <div className="reader-label">
-            {i === 0 ? 'Front cover' : i === spreads.length - 1 ? 'Back cover' : `Pages ${sp[0] + 1}–${sp[1] + 1}`}
-          </div>
+          <Spread plan={plan} pdf={pdf} sources={it.sources} />
+          <div className="reader-label">{it.label}</div>
         </div>
       ))}
     </div>
   );
 }
 
-function Spread({ plan, pdf, positions }) {
+function bookletItems(plan) {
+  const spreads = readerSpreads(plan.pages);
+  return spreads.map((sp, i) => ({
+    sources: sp.map((pos) => (pos === null ? undefined : plan.order[pos])),
+    label: i === 0 ? 'Front cover' : i === spreads.length - 1 ? 'Back cover' : `Pages ${sp[0] + 1}–${sp[1] + 1}`,
+  }));
+}
+
+function Spread({ plan, pdf, sources }) {
   const ref = useRef(null);
   const { w, h } = plan.page;
   useEffect(() => {
@@ -31,10 +40,9 @@ function Spread({ plan, pdf, positions }) {
     canvas.height = PX;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    positions.forEach((pos, side) => {
+    sources.forEach((src, side) => {
       const x = side * pw;
-      if (pos === null) return; // nothing on this side (outside of a cover)
-      const src = plan.order[pos];
+      if (src === undefined) return; // nothing on this side
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(x, 0, pw, PX);
       if (src === null) {
@@ -55,7 +63,7 @@ function Spread({ plan, pdf, positions }) {
         .catch(() => {});
     });
     // Fold line
-    if (positions[0] !== null && positions[1] !== null) {
+    if (sources[0] !== undefined && sources[1] !== undefined) {
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.beginPath();
       ctx.moveTo(pw, 0);
@@ -65,6 +73,6 @@ function Spread({ plan, pdf, positions }) {
     return () => {
       alive = false;
     };
-  }, [plan, pdf, positions, w, h]);
+  }, [plan, pdf, sources, w, h]);
   return <canvas ref={ref} className="reader-canvas" />;
 }

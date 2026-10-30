@@ -14,10 +14,12 @@ export default function ShapeCard({ plan, base, onChange, fileName }) {
   const { out, shape } = plan;
   const square = Math.abs(out.w - out.h) < 0.5;
   const shapes = [
-    { value: 'rect', label: 'Square corners' },
+    { value: 'rect', label: 'Square' },
     { value: 'rounded', label: 'Rounded' },
     { value: 'ellipse', label: square ? 'Circle' : 'Oval' },
+    { value: 'contour', label: 'Follow design' },
   ];
+  const pickShape = (v) => onChange(v === 'contour' ? { shape: v, cutter: 'plotter', marks: false } : { shape: v });
 
   const downloadSvg = () => {
     const svg = buildCutSvg(plan.layout, out, shape, { title: `${fileName} cut lines` });
@@ -27,7 +29,35 @@ export default function ShapeCard({ plan, base, onChange, fileName }) {
   return (
     <div className="card">
       <div className="field-label">Shape</div>
-      <Segmented options={shapes} value={shape.shape} onChange={(v) => onChange({ shape: v })} label="Shape" />
+      <Segmented options={shapes} value={shape.shape} onChange={pickShape} label="Shape" />
+
+      {shape.shape === 'contour' && (
+        <>
+          <p className="hint">The sticker cutter cuts around your design, like a die-cut sticker.</p>
+          <div className="contour-status">
+            {!shape.found
+              ? 'Finding the outline of your design…'
+              : shape.outlines.length
+                ? `✓ Cut line found${shape.pieces > 1 ? ` (${shape.pieces} parts)` : ''}`
+                : 'No design found'}
+          </div>
+          <div className="field-label spaced">White border around the design</div>
+          <div className="chips chips-4">
+            {[0, 1, 2, 3].map((b) => (
+              <button key={b} type="button" className={`chip ${Math.abs((base.contourOffset ?? 2) - b) < 0.05 ? 'chip-on' : ''}`} onClick={() => onChange({ contourOffset: b })}>
+                <span>{b === 0 ? 'None' : `${b} mm`}</span>
+              </button>
+            ))}
+          </div>
+          <label className="switch-row spaced">
+            <span>
+              <span className="field-label inline">White counts as empty</span>
+              <span className="hint">Turn off if your design has white parts at its edge that must stay.</span>
+            </span>
+            <input type="checkbox" className="switch" checked={base.contourIgnoreWhite !== false} onChange={(e) => onChange({ contourIgnoreWhite: e.target.checked })} />
+          </label>
+        </>
+      )}
 
       {shape.shape === 'rounded' && (
         <>
@@ -57,13 +87,17 @@ export default function ShapeCard({ plan, base, onChange, fileName }) {
         </>
       )}
 
-      <div className="field-label spaced">Cut with</div>
-      <Segmented
-        options={CUTTERS}
-        value={shape.cutter}
-        onChange={(v) => onChange({ cutter: v, marks: v !== 'plotter' })}
-        label="Cut with"
-      />
+      {shape.shape !== 'contour' && (
+        <>
+          <div className="field-label spaced">Cut with</div>
+          <Segmented
+            options={CUTTERS}
+            value={shape.cutter}
+            onChange={(v) => onChange({ cutter: v, marks: v !== 'plotter' })}
+            label="Cut with"
+          />
+        </>
+      )}
       <p className="hint">
         {shape.cutter === 'plotter'
           ? 'A sticker cutter (plotter) follows the cut line around every piece. Cut marks are turned off; the cut line is added to the PDF.'

@@ -181,6 +181,18 @@ export function getCardWarnings({ plan, geometry, imageInfo, safety }) {
     add('ellipse-guillotine', 'caution', 'A guillotine can\'t cut circles',
       'Choose Sticker cutter so the cutter follows the round line, or cut them with a round punch.');
   }
+  if (shape.shape === 'contour' && shape.found) {
+    if (!shape.outlines.length) {
+      add('contour-empty', 'risk', 'No design found to cut around',
+        'The piece looks empty (all white or transparent). Check the file, or turn off "White counts as empty" in Shape.');
+    } else if (shape.coverage > 0.95) {
+      add('contour-full', 'caution', 'The design fills the whole piece',
+        'There is no empty space around the design, so the cut line just follows the piece edge. Use a design with a transparent or white background, or choose Rounded.');
+    } else if (shape.pieces > 1) {
+      add('contour-many', 'info', `${shape.pieces} separate cut lines per sticker`,
+        'Parts of the design are far apart, so each part gets its own cut line. Make the border bigger to join them into one sticker.');
+    }
+  }
   if (shape.cutter === 'plotter') {
     add('plotter-how', 'info', 'How the sticker cutter works',
       'The cut line is in the PDF as the spot colour "CutContour". Print & cut programs (VersaWorks, Onyx, Flexi, Summa, Graphtec) send it to the cutter. For Silhouette or Cricut, download the SVG cut file. Leave about 15 mm around the sheet for the cutter\'s registration marks.', true);

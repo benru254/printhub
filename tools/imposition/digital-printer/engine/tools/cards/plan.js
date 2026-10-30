@@ -13,7 +13,11 @@ import { resolveSettings, MAX_BLEED, STANDARD_BLEED } from './settings.js';
  * inkTouches: true when the design's colour reaches its edges (from the picture check).
  * It decides whether "auto" makes bleed for a file that has none.
  */
-export function planCards({ geometry, base, overrides = {}, customSheets = [], printer = DEFAULT_PRINTER, inkTouches = false }) {
+/**
+ * contour: for shape 'contour', the cut lines found around the design
+ * ({ outlines, coverage, pieces } from contourFromPixels), or null while they are being found.
+ */
+export function planCards({ geometry, base, overrides = {}, customSheets = [], printer = DEFAULT_PRINTER, inkTouches = false, contour = null }) {
   const sides = geometry.pages.slice(0, 2);
   const first = sides[0];
   const twoSided = sides.length >= 2;
@@ -80,9 +84,15 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
     printer,
     flip: printer.flip || 'book',
     shape: {
-      shape: ['rounded', 'ellipse'].includes(base.shape) ? base.shape : 'rect',
+      shape: ['rounded', 'ellipse', 'contour'].includes(base.shape) ? base.shape : 'rect',
       radius: clampRadius(base.radius ?? 3, out.w, out.h),
-      cutter: base.cutter === 'plotter' ? 'plotter' : 'guillotine',
+      // A cut line that follows the design can only be cut by a sticker cutter.
+      cutter: base.cutter === 'plotter' || base.shape === 'contour' ? 'plotter' : 'guillotine',
+      offset: base.contourOffset ?? 2,
+      outlines: base.shape === 'contour' && contour ? contour.outlines : [],
+      coverage: contour ? contour.coverage : null,
+      pieces: contour ? contour.pieces : null,
+      found: base.shape === 'contour' ? !!contour : true,
     },
     sheet,
     layout,

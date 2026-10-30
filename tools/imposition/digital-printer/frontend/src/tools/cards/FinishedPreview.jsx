@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { fmtSize, fmtMm, shapeOutline, outlineToCanvas } from '@engine';
+import { fmtSize, fmtMm, pieceOutline, outlineToCanvas } from '@engine';
 import { useWidth } from '../../hooks/useWidth.js';
 import { drawPiece } from './drawPiece.js';
 
@@ -50,7 +50,7 @@ export default function FinishedPreview({ plan, renders, copies, unit, safety })
 
       // Paper with a soft shadow, then the design cut at the finished size and shape.
       const sh = plan.shape || { shape: 'rect' };
-      const outline = shapeOutline({ shape: sh.shape, w: out.w, h: out.h, radius: sh.radius });
+      const outline = pieceOutline(sh, out.w, out.h);
       const toPx = (mx, my) => [x + mx * k, y + my * k];
       ctx.save();
       ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';

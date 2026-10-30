@@ -30,11 +30,15 @@ await save('tickets-12-pages.pdf', await tickets(12));
 
 // 10-page A5 booklet with 3 mm bleed (not a multiple of 4: 2 blank pages get added).
 await save('booklet-a5-10-pages.pdf', await bookletPdf(10));
+// 98-page A5 book: cover + 96 inside pages (too many to staple: glued spine).
+await save('book-a5-98-pages.pdf', await bookletPdf(98));
 
 // ---- Pictures ----
 // Front + back business card pictures saved at 300 dpi (85 x 55 mm = 1004 x 650 px).
 await save('picture-card-front.png', png(1004, 650, cardPixels([20, 110, 180]), 300));
 await save('picture-card-back.png', png(1004, 650, cardPixels([215, 90, 30]), 300));
+// A logo sticker with a transparent background and an irregular shape (for "Follow design").
+await save('sticker-logo-transparent.png', pngRgba(1200, 900, logoPixels, 300));
 // A picture with no print size stored (like a WhatsApp image).
 await save('picture-whatsapp.png', png(1280, 800, cardPixels([40, 140, 70]), null));
 
@@ -133,6 +137,40 @@ function cardPixels(bg) {
     if (x > w * 0.06 && x < w * 0.32 && y > h * 0.3 && y < h * 0.8) return [255, 255, 255];
     return bg;
   };
+}
+
+// Badge-like logo: a circle with a bar through it, transparent around it.
+function logoPixels(x, y, w, h) {
+  const cx = w * 0.38;
+  const cy = h * 0.5;
+  const inCircle = (x - cx) ** 2 + (y - cy) ** 2 < (h * 0.36) ** 2;
+  const inBar = x > w * 0.3 && x < w * 0.92 && y > h * 0.4 && y < h * 0.6;
+  if (inCircle) return (x - cx) ** 2 + (y - cy) ** 2 < (h * 0.3) ** 2 ? [230, 120, 20, 255] : [20, 70, 140, 255];
+  if (inBar) return [20, 70, 140, 255];
+  return [0, 0, 0, 0];
+}
+
+// PNG writer with transparency (RGBA).
+function pngRgba(w, h, pixel, dpi) {
+  const raw = Buffer.alloc((w * 4 + 1) * h);
+  for (let y = 0; y < h; y++) {
+    const row = y * (w * 4 + 1);
+    for (let x = 0; x < w; x++) raw.set(pixel(x, y, w, h), row + 1 + x * 4);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(w, 0);
+  ihdr.writeUInt32BE(h, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 6; // RGBA
+  const phys = Buffer.alloc(9);
+  const ppm = Math.round(dpi / 0.0254);
+  phys.writeUInt32BE(ppm, 0);
+  phys.writeUInt32BE(ppm, 4);
+  phys[8] = 1;
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr), chunk('pHYs', phys), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0)),
+  ]);
 }
 
 // Minimal PNG writer (RGB, optional print resolution).
