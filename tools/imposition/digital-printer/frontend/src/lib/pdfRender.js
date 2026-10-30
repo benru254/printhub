@@ -26,7 +26,7 @@ export async function openPdf(bytes) {
     return job;
   };
 
-  async function draw(index, maxPx) {
+  async function draw(index, maxPx, transparent = false) {
     const page = await doc.getPage(index + 1);
     // rotation: 0 so previews match the output exactly (the output ignores /Rotate).
     const base = page.getViewport({ scale: 1, rotation: 0 });
@@ -37,9 +37,11 @@ export async function openPdf(bytes) {
     canvas.width = Math.ceil(viewport.width);
     canvas.height = Math.ceil(viewport.height);
     const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, canvas, viewport }).promise;
+    if (!transparent) {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    await page.render({ canvasContext: ctx, canvas, viewport, background: transparent ? 'rgba(0,0,0,0)' : undefined }).promise;
 
     // Turns a PDF box (points) into a pixel rectangle on this canvas.
     const rectToPx = (box) => {
@@ -51,10 +53,11 @@ export async function openPdf(bytes) {
     return { index, canvas, rectToPx };
   }
 
-  function render(index, maxPx) {
-    const key = `${index}@${maxPx}`;
+  // transparent: keep empty areas see-through (used to find the outline of a design).
+  function render(index, maxPx, { transparent = false } = {}) {
+    const key = `${index}@${maxPx}${transparent ? 't' : ''}`;
     if (cache.has(key)) return cache.get(key);
-    const job = enqueue(() => draw(index, maxPx));
+    const job = enqueue(() => draw(index, maxPx, transparent));
     if (maxPx <= CACHE_MAX_PX) {
       cache.set(key, job);
       job.catch(() => cache.delete(key));

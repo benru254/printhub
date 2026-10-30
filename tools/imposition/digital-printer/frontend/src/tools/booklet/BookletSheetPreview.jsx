@@ -3,7 +3,8 @@ import { cropMarks, placeOnSheet, mirrorLine, canvasAngle } from '@engine';
 import { useWidth } from '../../hooks/useWidth.js';
 
 // One printed sheet side: open spreads with big page numbers, so the order is easy to check.
-export default function BookletSheetPreview({ plan, sheetIndex, isBack, renders }) {
+// numberFor(pos, src): the big number shown on each page (default: booklet page number).
+export default function BookletSheetPreview({ plan, sheetIndex, isBack, renders, numberFor, label = 'Booklet print sheet' }) {
   const [wrap, width] = useWidth(320);
   const canvasRef = useRef(null);
 
@@ -54,7 +55,8 @@ export default function BookletSheetPreview({ plan, sheetIndex, isBack, renders 
           }
         }
         // Big page number, so the order is easy to check
-        const label = src === null ? `${pos + 1} blank` : String(pos + 1);
+        const num = numberFor ? numberFor(pos, src) : String(pos + 1);
+        const text = src === null ? `${num} blank` : num;
         const fs = Math.max(12, Math.min(W, H) * k * 0.22);
         ctx.font = `800 ${fs}px system-ui, sans-serif`;
         ctx.textAlign = 'center';
@@ -62,8 +64,8 @@ export default function BookletSheetPreview({ plan, sheetIndex, isBack, renders 
         ctx.lineWidth = Math.max(2, fs / 9);
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
         ctx.fillStyle = 'rgba(25, 120, 190, 0.85)';
-        ctx.strokeText(label, (x + W / 2) * k, 0);
-        ctx.fillText(label, (x + W / 2) * k, 0);
+        ctx.strokeText(text, (x + W / 2) * k, 0);
+        ctx.fillText(text, (x + W / 2) * k, 0);
       });
       // Fold line (screen only)
       ctx.setLineDash([4 * dpr, 3 * dpr]);
@@ -86,11 +88,11 @@ export default function BookletSheetPreview({ plan, sheetIndex, isBack, renders 
       ctx.lineTo(l.x2 * k, l.y2 * k);
       ctx.stroke();
     }
-  }, [plan, sheetIndex, isBack, renders, width]);
+  }, [plan, sheetIndex, isBack, renders, width, numberFor]);
 
   return (
     <div ref={wrap} className="preview-wrap">
-      <canvas ref={canvasRef} className="preview-canvas" aria-label="Booklet print sheet" />
+      <canvas ref={canvasRef} className="preview-canvas" aria-label={label} />
     </div>
   );
 }

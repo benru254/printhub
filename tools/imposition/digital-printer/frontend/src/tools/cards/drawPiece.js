@@ -3,11 +3,14 @@ import { pieceDrawing } from '@engine';
 // Draws ONE finished piece (cut exactly at its finished size, no bleed) at (x, y),
 // k = pixels per mm. Used by the Finished preview and by the safe zone check,
 // so both look at exactly the same picture.
-export function drawPiece(ctx, render, fit, page, x, y, k) {
+// background: paper colour behind the design, or null to keep empty areas see-through.
+export function drawPiece(ctx, render, fit, page, x, y, k, background = '#ffffff') {
   const pw = fit.outW * k;
   const ph = fit.outH * k;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(x, y, pw, ph);
+  if (background) {
+    ctx.fillStyle = background;
+    ctx.fillRect(x, y, pw, ph);
+  }
   if (!render) return;
   const d = pieceDrawing(fit, 0, page);
   const src = render.rectToPx(d.srcBoxPt);

@@ -4,7 +4,7 @@
 //   { op: 'C', x1, y1, x2, y2, x, y }  curve      { op: 'Z' }  close
 // The same outline is used for the preview, the PDF cut line and the SVG cut file.
 
-export const SHAPES = ['rect', 'rounded', 'ellipse'];
+export const SHAPES = ['rect', 'rounded', 'ellipse', 'contour'];
 
 const KAPPA = 0.5522847498; // how far curve handles go to draw a quarter circle
 
@@ -45,6 +45,18 @@ export function shapeOutline({ shape = 'rect', w, h, radius = 0 }) {
     { op: 'C', x1: 0, y1: r - k, x2: r - k, y2: 0, x: r, y: 0 },
     { op: 'Z' },
   ];
+}
+
+/**
+ * The cut outline of one finished piece for any shape, including 'contour'
+ * (shape.outlines = cut lines that follow the design, already in mm).
+ * Several outlines are joined into one path (each starts with its own 'M').
+ */
+export function pieceOutline(shape, w, h) {
+  if (shape && shape.shape === 'contour') {
+    return shape.outlines && shape.outlines.length ? shape.outlines.flat() : shapeOutline({ shape: 'rect', w, h });
+  }
+  return shapeOutline({ shape: (shape && shape.shape) || 'rect', w, h, radius: shape ? shape.radius : 0 });
 }
 
 // Moves every point of an outline with fn(x, y) -> [x, y].

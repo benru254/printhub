@@ -11,6 +11,42 @@ import { cornerFor, drawCropMarks, REGISTRATION } from '../../core/pdfPieces.js'
 
 const FOLD_GREY = rgb(0.45, 0.45, 0.45);
 
+/**
+ * Draws one page of a spread into a sheet page.
+ * half: -1 = left page, +1 = right page. shift (mm): positive = toward the fold (creep),
+ * negative = away from the fold (spine space). p = placement of the spread (placeOnSheet).
+ * ctx: { out (PDFDocument), src (PDFDocument), geometry, scale, eb (bleed mm), W, H, sheetH }
+ */
+export async function drawSpreadHalf(pdfPage, sourceIndex, half, shift, p, ctx) {
+  const { out, src, geometry, scale, eb, W, H, sheetH } = ctx;
+  const page = geometry.pages[sourceIndex];
+  const t = page.trimBoxPt;
+  const toSrc = (mm) => (mm / scale) * PT_PER_MM; // output mm -> source points
+  const bleed = Math.min(eb, page.bleedMm * scale);
+  // Left page: bleed on the left (outside), cut at the fold minus the shift.
+  // Right page: the other way round.
+  const left = half < 0 ? t.x - toSrc(bleed) : t.x + toSrc(shift);
+  const right = half < 0 ? t.x + t.width - toSrc(shift) : t.x + t.width + toSrc(bleed);
+  const box = { left, right, bottom: t.y - toSrc(bleed), top: t.y + t.height + toSrc(bleed) };
+  const embedded = await out.embedPage(src.getPage(sourceIndex), box);
+
+  const drawnW = W + bleed - shift; // mm
+  const drawnH = H + 2 * bleed;
+  const u = half < 0 ? -drawnW / 2 : drawnW / 2; // centre of this page, spread frame (fold at 0)
+  const a = (p.rot * Math.PI) / 180;
+  const cx = p.cx + u * Math.cos(a);
+  const cyPdf = sheetH - p.cy + u * Math.sin(a);
+  const turned = p.rot === 90 || p.rot === -90;
+  const corner = cornerFor({ cx, rot: p.rot, halfW: turned ? drawnH / 2 : drawnW / 2, halfH: turned ? drawnW / 2 : drawnH / 2 }, cyPdf);
+  pdfPage.drawPage(embedded, {
+    x: mmToPt(corner[0]),
+    y: mmToPt(corner[1]),
+    width: mmToPt(drawnW),
+    height: mmToPt(drawnH),
+    rotate: degrees(p.rot),
+  });
+}
+
 export async function buildBookletPdf({ sourceBytes, plan, title = 'Booklet' }) {
   const { layout, flip, sheetsInfo, order, scale, spread } = plan;
   if (!layout.count) throw new Error('The booklet does not fit on this sheet.');
@@ -25,36 +61,8 @@ export async function buildBookletPdf({ sourceBytes, plan, title = 'Booklet' }) 
   const eb = layout.effBleed; // bleed in output mm
   const W = plan.out.w;
   const H = plan.out.h;
-
-  // Draws one page of a spread. half: -1 = left page, +1 = right page. shift = creep (mm).
-  async function drawHalf(pdfPage, sourceIndex, half, shift, p) {
-    const page = plan.geometry.pages[sourceIndex];
-    const t = page.trimBoxPt;
-    const toSrc = (mm) => (mm / scale) * PT_PER_MM; // output mm -> source points
-    const bleed = Math.min(eb, page.bleedMm * scale);
-    // Left page: bleed on the left (outside), cut at the fold minus the creep shift.
-    // Right page: the other way round.
-    const left = half < 0 ? t.x - toSrc(bleed) : t.x + toSrc(shift);
-    const right = half < 0 ? t.x + t.width - toSrc(shift) : t.x + t.width + toSrc(bleed);
-    const box = { left, right, bottom: t.y - toSrc(bleed), top: t.y + t.height + toSrc(bleed) };
-    const embedded = await out.embedPage(src.getPage(sourceIndex), box);
-
-    const drawnW = W + bleed - shift; // mm
-    const drawnH = H + 2 * bleed;
-    const u = half < 0 ? -drawnW / 2 : drawnW / 2; // centre of this page, spread frame (fold at 0)
-    const a = (p.rot * Math.PI) / 180;
-    const cx = p.cx + u * Math.cos(a);
-    const cyPdf = sheetH - p.cy + u * Math.sin(a);
-    const turned = p.rot === 90 || p.rot === -90;
-    const corner = cornerFor({ cx, rot: p.rot, halfW: turned ? drawnH / 2 : drawnW / 2, halfH: turned ? drawnW / 2 : drawnH / 2 }, cyPdf);
-    pdfPage.drawPage(embedded, {
-      x: mmToPt(corner[0]),
-      y: mmToPt(corner[1]),
-      width: mmToPt(drawnW),
-      height: mmToPt(drawnH),
-      rotate: degrees(p.rot),
-    });
-  }
+  const halfCtx = { out, src, geometry: plan.geometry, scale, eb, W, H, sheetH };
+  const drawHalf = (pdfPage, sourceIndex, half, shift, p) => drawSpreadHalf(pdfPage, sourceIndex, half, shift, p, halfCtx);
 
   // Short dashed lines outside the grid, in line with each fold.
   function drawFoldMarks(pdfPage, isBack) {
@@ -85,7 +93,7 @@ export async function buildBookletPdf({ sourceBytes, plan, title = 'Booklet' }) 
   }
 
   for (let i = 0; i < sheetsInfo.length; i++) {
-    const shift = plan.shiftFor(i);
+    const shift = plan.shiftFor(i); // creep (and, for glued books, minus the spine space)
     for (const isBack of [false, true]) {
       const [leftPos, rightPos] = isBack ? sheetsInfo[i].back : sheetsInfo[i].front;
       const pdfPage = out.addPage([mmToPt(sheetW), mmToPt(sheetH)]);
@@ -97,7 +105,8 @@ export async function buildBookletPdf({ sourceBytes, plan, title = 'Booklet' }) 
       drawCropMarks(pdfPage, layout, { isBack, flip });
       drawFoldMarks(pdfPage, isBack);
       if (layout.grid && sheetH - layout.margins.bottom - (layout.grid.y + layout.grid.h + layout.outer) > 2.5) {
-        pdfPage.drawText(`PrintHub booklet · sheet ${i + 1} of ${sheetsInfo.length} · ${isBack ? 'back' : 'front'} · pages ${leftPos + 1} | ${rightPos + 1}`, {
+        const group = sheetsInfo[i].signature != null ? ` · signature ${sheetsInfo[i].signature + 1}` : '';
+        pdfPage.drawText(`PrintHub ${plan.tool === 'perfectbound' ? 'book' : 'booklet'}${group} · sheet ${i + 1} of ${sheetsInfo.length} · ${isBack ? 'back' : 'front'} · pages ${leftPos + 1} | ${rightPos + 1}`, {
           x: mmToPt(layout.grid.x),
           y: mmToPt(sheetH - (layout.grid.y + layout.grid.h + layout.outer + 2.8)),
           size: 5.5,

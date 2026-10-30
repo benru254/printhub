@@ -17,6 +17,7 @@ import FinishedPreview from './FinishedPreview.jsx';
 import BleedCard from './BleedCard.jsx';
 import ShapeCard from './ShapeCard.jsx';
 import { useSafeZone } from './useSafeZone.js';
+import { useContour } from './useContour.js';
 import { previewBleedCanvases, printBleedArt } from './bleedArt.js';
 
 const VIEWS = [
@@ -74,10 +75,17 @@ export default function CardsTool({
   const safety = useSafeZone(pdf, checkPlan, renders);
   const inkTouches = !!safety && safety.some((s) => s && s.ink && s.ink.touches);
 
+  // Cut line around the design (shape "Follow design").
+  const contour = useContour(pdf, checkPlan, {
+    enabled: safeBase.shape === 'contour',
+    offset: safeBase.contourOffset ?? 2,
+    ignoreWhite: safeBase.contourIgnoreWhite !== false,
+  });
+
   // 2) The real plan, which may make bleed when colour touches the edge.
   const plan = useMemo(
-    () => planCards({ geometry, base: safeBase, overrides, customSheets, printer, inkTouches }),
-    [geometry, safeBase, overrides, customSheets, printer, inkTouches]
+    () => planCards({ geometry, base: safeBase, overrides, customSheets, printer, inkTouches, contour }),
+    [geometry, safeBase, overrides, customSheets, printer, inkTouches, contour]
   );
   const bleedPreview = useMemo(() => previewBleedCanvases(plan, renders), [plan, renders]);
   const counts = useMemo(
@@ -102,7 +110,7 @@ export default function CardsTool({
   // Change settings. Size changes show the finished pieces; sheet changes show the sheet.
   function update(patch) {
     setBase({ ...safeBase, ...patch });
-    if ('size' in patch || 'fitMode' in patch || 'shape' in patch || 'radius' in patch) setView('finished');
+    if ('size' in patch || 'fitMode' in patch || 'shape' in patch || 'radius' in patch || 'contourOffset' in patch || 'contourIgnoreWhite' in patch) setView('finished');
     if ('cutter' in patch) setView('sheet');
     if ('sheet' in patch || 'orientation' in patch || 'marks' in patch || 'makeBleed' in patch) setView('sheet');
   }

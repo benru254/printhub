@@ -10,7 +10,7 @@
 import { PDFName, PDFNumber, PDFOperator, PDFOperatorNames, pushGraphicsState, popGraphicsState, setGraphicsState, setLineWidth, moveTo, lineTo, appendBezierCurve, closePath, stroke } from 'pdf-lib';
 import { mmToPt } from './units.js';
 import { placeOnSheet } from './artFit.js';
-import { shapeOutline, mapOutline, outlineToSvg } from './shapes.js';
+import { pieceOutline, mapOutline, outlineToSvg } from './shapes.js';
 
 export const CUT_SPOT_NAME = 'CutContour';
 export const CUT_LINE_WIDTH_PT = 0.25;
@@ -20,7 +20,7 @@ export const CUT_LINE_WIDTH_PT = 0.25;
  * shape: { shape, radius }, out: finished size, isBack: mirror like the back side.
  */
 export function sheetCutOutlines(layout, out, shape, { isBack = false, flip = 'book', slots } = {}) {
-  const outline = shapeOutline({ shape: shape.shape, w: out.w, h: out.h, radius: shape.radius });
+  const outline = pieceOutline(shape, out.w, out.h);
   const list = slots || layout.slots;
   return list.map((slot) => {
     const p = placeOnSheet(slot, { halfW: out.w / 2, halfH: out.h / 2 }, isBack, layout.sheetW, layout.sheetH, flip);

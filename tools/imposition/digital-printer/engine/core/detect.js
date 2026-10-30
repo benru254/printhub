@@ -11,6 +11,8 @@ export function detectProduct(trimMm, pageCount = 1) {
   const p = detectBySize(trimMm, pageCount);
   // Many pages of small pieces (tickets, badges, cards): keep them in order with Cut & Stack.
   if (pageCount > 2 && ['business-card', 'small-flyer', 'small-item'].includes(p.kind)) return { ...p, recommended: 'cutstack' };
+  // Too many pages to staple (over 64): a glued-spine book.
+  if (pageCount > 64 && p.kind === 'document') return { ...p, label: `${p.sizeName} book`, recommended: 'perfectbound' };
   return p;
 }
 

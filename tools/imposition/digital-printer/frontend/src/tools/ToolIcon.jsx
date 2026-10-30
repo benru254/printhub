@@ -26,6 +26,13 @@ const ICONS = {
       <path d="M16 8v19" />
     </g>
   ),
+  perfectbound: (
+    <g {...S}>
+      <rect x="9" y="5" width="17" height="22" rx="1" />
+      <rect x="5" y="5" width="4" height="22" rx="1" />
+      <path d="M13 11h9M13 15h9M13 19h6" />
+    </g>
+  ),
   cutstack: (
     <g {...S}>
       <rect x="6" y="10" width="18" height="16" rx="1" />

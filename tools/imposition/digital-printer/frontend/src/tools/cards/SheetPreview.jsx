@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { cropMarks, pieceDrawing, placeOnSheet, mirrorLine, canvasAngle, shapeOutline, outlineToCanvas } from '@engine';
+import { cropMarks, pieceDrawing, placeOnSheet, mirrorLine, canvasAngle, pieceOutline, outlineToCanvas } from '@engine';
 import { useWidth } from '../../hooks/useWidth.js';
 
 // Live preview of the press sheet, drawn on a canvas.
@@ -96,7 +96,7 @@ export default function SheetPreview({ plan, renders, side, bleedArt, pieceAt, d
       } else {
         ctx.translate(p.cx * k, p.cy * k);
         ctx.rotate(canvasAngle(p.rot));
-        const outline = shapeOutline({ shape: sh.shape, w: plan.out.w, h: plan.out.h, radius: sh.radius });
+        const outline = pieceOutline(sh, plan.out.w, plan.out.h);
         outlineToCanvas(ctx, outline, (x, y) => [(x - plan.out.w / 2) * k, (y - plan.out.h / 2) * k]);
         if (sh.cutter === 'plotter') {
           ctx.strokeStyle = '#ff00ff';
