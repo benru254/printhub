@@ -171,11 +171,11 @@ test('plan: resized picture to 85 x 55 business card', async () => {
   const g = await readPdfGeometry(pdf);
   const plan = planCards({ geometry: g, base: { ...CARD_DEFAULTS, size: { w: 85, h: 55 } } });
   assert.equal(plan.resized, true);
-  assert.equal(plan.layout.count, 18); // 85 x 55 (not 85 x 50) fits 18 on A3
+  assert.equal(plan.layout.count, 21); // 85 x 55, no bleed: 18 with a 3 mm gap, 21 when pieces share cut lines
   const notes = getCardWarnings({ plan, geometry: g, imageInfo: info }).map((n) => n.id);
   assert.ok(notes.includes('fill-crop'));
   const counts = countsBySheet(plan, SHEET_ORDER, [], 'portrait');
-  assert.equal(counts.A3, 18);
+  assert.equal(counts.A3, 21);
 });
 
 test('item too big returns 0 with a warning', async () => {

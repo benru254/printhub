@@ -23,6 +23,11 @@ await save('flyer-a5-bleed.pdf', await card({ w: 148, h: 210, bleed: 3, trimBox:
 // 8-page A4 document (for page thumbnails and the booklet suggestion).
 await save('document-a4-8-pages.pdf', await documentPdf(8));
 
+// A6 receipt design (white edges, space at the top right for the number).
+await save('receipt-a6.pdf', await receipt());
+// 12 different tickets, one per page (for "Pages in order").
+await save('tickets-12-pages.pdf', await tickets(12));
+
 // ---- Pictures ----
 // Front + back business card pictures saved at 300 dpi (85 x 55 mm = 1004 x 650 px).
 await save('picture-card-front.png', png(1004, 650, cardPixels([20, 110, 180]), 300));
@@ -59,6 +64,37 @@ async function documentPdf(pages) {
     page.drawRectangle({ x: 30, y: 30, width: page.getWidth() - 60, height: 60, color: rgb(0.1, 0.4, 0.6) });
     page.drawText(String(i), { x: page.getWidth() / 2 - 40, y: page.getHeight() / 2 - 40, size: 120, font, color: rgb(0.15, 0.15, 0.15) });
     page.drawText(`Page ${i} of ${pages}`, { x: 40, y: page.getHeight() - 60, size: 18, font, color: rgb(0.3, 0.3, 0.3) });
+  }
+  return doc.save();
+}
+
+async function receipt() {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  const thin = await doc.embedFont(StandardFonts.Helvetica);
+  const W = mmToPt(105);
+  const H = mmToPt(148);
+  const page = doc.addPage([W, H]);
+  const m = mmToPt(6);
+  page.drawText('PROFUEL GAS', { x: m, y: H - m - 14, size: 16, font, color: rgb(0.05, 0.35, 0.2) });
+  page.drawText('CASH SALE RECEIPT', { x: m, y: H - m - 30, size: 9, font: thin, color: rgb(0.2, 0.2, 0.2) });
+  let y = H - mmToPt(40);
+  for (const label of ['Date:', 'Name:', 'Item', 'Qty', 'Amount (KES)']) {
+    page.drawText(label, { x: m, y, size: 9, font: thin, color: rgb(0.2, 0.2, 0.2) });
+    page.drawLine({ start: { x: m + 60, y: y - 2 }, end: { x: W - m, y: y - 2 }, thickness: 0.5, color: rgb(0.6, 0.6, 0.6) });
+    y -= mmToPt(12);
+  }
+  page.drawText('Signature: ________________', { x: m, y: m + 6, size: 9, font: thin, color: rgb(0.2, 0.2, 0.2) });
+  return doc.save();
+}
+
+async function tickets(n) {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.HelveticaBold);
+  for (let i = 1; i <= n; i++) {
+    const page = doc.addPage([mmToPt(100), mmToPt(50)]);
+    page.drawRectangle({ x: 0, y: 0, width: page.getWidth(), height: page.getHeight(), color: rgb(0.98, 0.92, 0.75) });
+    page.drawText(`TICKET ${i}`, { x: 30, y: 60, size: 28, font, color: rgb(0.5, 0.1, 0.1) });
   }
   return doc.save();
 }

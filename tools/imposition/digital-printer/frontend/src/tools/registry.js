@@ -17,9 +17,9 @@ export const TOOLS = [
   },
   {
     id: 'cutstack',
-    name: 'Numbered books',
-    desc: 'Receipt books, tickets and pads that stay in order after cutting.',
-    status: 'soon',
+    name: 'Numbered books & tickets',
+    desc: 'Add numbers to receipts and tickets, or keep many pages in order after cutting (cut & stack).',
+    status: 'ready',
   },
   {
     id: 'resize',

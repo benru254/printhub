@@ -5,7 +5,10 @@ import { useWidth } from '../../hooks/useWidth.js';
 // Live preview of the press sheet, drawn on a canvas.
 // Uses the SAME plan, pieceDrawing and placeOnSheet as the PDF builder, so what you see is what prints.
 // bleedArt: when bleed is made, one canvas per side (piece + made bleed).
-export default function SheetPreview({ plan, renders, side, bleedArt }) {
+// Optional (used by Cut & Stack):
+//   pieceAt(index)  -> { render, page, fit } to show a different page in a spot, or null for an empty spot
+//   decorate(ctx, { slot, index, p, k, isBack }) -> draw extra things on a piece (numbers, stack labels)
+export default function SheetPreview({ plan, renders, side, bleedArt, pieceAt, decorate }) {
   const [wrap, width] = useWidth(320);
   const canvasRef = useRef(null);
 
@@ -53,18 +56,31 @@ export default function SheetPreview({ plan, renders, side, bleedArt }) {
       ? { halfW: plan.out.w / 2 + layout.effBleed, halfH: plan.out.h / 2 + layout.effBleed }
       : pieceDrawing(fit, layout.effBleed, page);
     const src = !made && render ? render.rectToPx(d.srcBoxPt) : null;
-    for (const slot of layout.slots) {
-      const p = placeOnSheet(slot, d, isBack, sheetW, sheetH, flip);
+    layout.slots.forEach((slot, index) => {
+      // A spot can show its own page (Cut & Stack pages mode), or be empty.
+      let pd = d;
+      let pSrc = src;
+      let pRender = render;
+      if (pieceAt) {
+        const own = pieceAt(index);
+        if (own === null) return; // empty spot
+        if (own && !made) {
+          pd = pieceDrawing(own.fit, layout.effBleed, own.page);
+          pRender = own.render;
+          pSrc = own.render ? own.render.rectToPx(pd.srcBoxPt) : null;
+        }
+      }
+      const p = placeOnSheet(slot, pd, isBack, sheetW, sheetH, flip);
       ctx.save();
       ctx.translate(p.cx * k, p.cy * k);
       ctx.rotate(canvasAngle(p.rot));
       if (made) {
         ctx.drawImage(made, -d.halfW * k, -d.halfH * k, 2 * d.halfW * k, 2 * d.halfH * k);
-      } else if (src) {
-        ctx.drawImage(render.canvas, src.x, src.y, src.w, src.h, -d.halfW * k, -d.halfH * k, 2 * d.halfW * k, 2 * d.halfH * k);
+      } else if (pSrc) {
+        ctx.drawImage(pRender.canvas, pSrc.x, pSrc.y, pSrc.w, pSrc.h, -pd.halfW * k, -pd.halfH * k, 2 * pd.halfW * k, 2 * pd.halfH * k);
       } else {
         ctx.fillStyle = '#dbe7f3';
-        ctx.fillRect(-d.halfW * k, -d.halfH * k, 2 * d.halfW * k, 2 * d.halfH * k);
+        ctx.fillRect(-pd.halfW * k, -pd.halfH * k, 2 * pd.halfW * k, 2 * pd.halfH * k);
       }
       ctx.restore();
 
@@ -75,7 +91,13 @@ export default function SheetPreview({ plan, renders, side, bleedArt }) {
       ctx.lineWidth = dpr;
       ctx.strokeRect((p.cx - slot.w / 2) * k, (p.cy - slot.h / 2) * k, slot.w * k, slot.h * k);
       ctx.restore();
-    }
+
+      if (decorate) {
+        ctx.save();
+        decorate(ctx, { slot, index, p, k, isBack });
+        ctx.restore();
+      }
+    });
 
     // Crop marks (printed)
     ctx.strokeStyle = '#111111';
@@ -87,7 +109,7 @@ export default function SheetPreview({ plan, renders, side, bleedArt }) {
       ctx.lineTo(l.x2 * k, l.y2 * k);
       ctx.stroke();
     }
-  }, [plan, renders, side, width, bleedArt]);
+  }, [plan, renders, side, width, bleedArt, pieceAt, decorate]);
 
   return (
     <div ref={wrap} className="preview-wrap">
