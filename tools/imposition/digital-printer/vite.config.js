@@ -17,6 +17,10 @@ export default defineConfig({
     port: 5180,
     host: true, // lets you open the app on your phone over the same Wi-Fi
     fs: { allow: [here] },
+    // Orders, tracking and staff go to the PrintHub server (printhub/server, port 5181).
+    proxy: {
+      '/api': { target: 'http://localhost:5181', changeOrigin: false },
+    },
   },
   build: {
     outDir: '../dist',

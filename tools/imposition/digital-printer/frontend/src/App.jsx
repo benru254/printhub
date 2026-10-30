@@ -12,6 +12,16 @@ import CutStackTool from './tools/cutstack/CutStackTool.jsx';
 import BookletTool from './tools/booklet/BookletTool.jsx';
 import PerfectBoundTool from './tools/perfectbound/PerfectBoundTool.jsx';
 import PrintersPanel from './printers/PrintersPanel.jsx';
+import TrackScreen from './screens/TrackScreen.jsx';
+import StaffApp from './staff/StaffApp.jsx';
+
+// #/track/PH-XXXXXX = customer tracking, #/staff... = operator side, anything else = the tool.
+function readRoute() {
+  const h = window.location.hash.replace(/^#\/?/, '');
+  if (h === 'track' || h.startsWith('track/')) return { name: 'track', code: decodeURIComponent(h.slice(6)) };
+  if (h === 'staff' || h.startsWith('staff/')) return { name: 'staff', path: h.slice(6) };
+  return { name: 'main' };
+}
 
 // Screens: start (choose file) -> overview (your file + choose a tool) -> tool
 // The printers panel opens on top of any screen.
@@ -26,6 +36,14 @@ export default function App() {
   const [printers, setPrinters] = useState(() => loadPrinters(store.get('customSheets', [])));
   const [activeId, setActiveId] = useState(() => store.get('activePrinter', null));
   const [printersOpen, setPrintersOpen] = useState(false);
+  const [route, setRoute] = useState(readRoute);
+  const [fromOrder, setFromOrder] = useState(null); // { id, code, customerName, quantity, recipe } when opened from an order
+
+  useEffect(() => {
+    const onHash = () => setRoute(readRoute());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const printer = printers.find((p) => p.id === activeId) || printers[0];
 
@@ -51,11 +69,25 @@ export default function App() {
       setJob({ ...loaded, geometry, pdf, id: Date.now() });
       setTool(null);
       setScreen('overview');
+      setFromOrder(null);
+      return true;
     } catch (e) {
       setError(e.message || 'Something went wrong reading this file.');
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  // Operator: open an order's file in its tool, set up the way the customer chose.
+  async function openOrder(order, blob, fileName) {
+    const file = new File([blob], fileName || `${order.code}.pdf`, { type: blob.type || 'application/pdf' });
+    window.location.hash = '';
+    if (!(await handleFiles([file]))) return;
+    const recipe = order.recipe && order.recipe.tool ? order.recipe : { tool: order.tool };
+    setFromOrder({ id: order.id, code: order.code, customerName: order.customerName, quantity: order.quantity, recipe });
+    setTool(recipe.tool);
+    setScreen('tool');
   }
 
   const tips = {
@@ -103,7 +135,11 @@ export default function App() {
   }
 
   let body;
-  if (!job || screen === 'start') {
+  if (route.name === 'track') {
+    body = <TrackScreen key={route.code} code={route.code} />;
+  } else if (route.name === 'staff') {
+    body = <StaffApp path={route.path} onOpenInTool={openOrder} />;
+  } else if (!job || screen === 'start') {
     body = <StartScreen onFiles={handleFiles} busy={busy} error={error} />;
   } else if (screen === 'tool' && (tool === 'cards' || tool === 'cutstack' || tool === 'booklet' || tool === 'perfectbound')) {
     const Tool = { cards: CardsTool, cutstack: CutStackTool, booklet: BookletTool, perfectbound: PerfectBoundTool }[tool];
@@ -111,6 +147,7 @@ export default function App() {
       <Tool
         key={`${tool}-${job.id}`}
         job={job}
+        initial={fromOrder && fromOrder.recipe.tool === tool ? fromOrder.recipe : null}
         onBack={() => setScreen('overview')}
         onFiles={handleFiles}
         busy={busy}
@@ -145,6 +182,14 @@ export default function App() {
   return (
     <div className="app">
       <Header printer={printer} onPrinters={() => setPrintersOpen('list')} />
+      {fromOrder && route.name === 'main' && job && (
+        <div className="order-banner">
+          <span>
+            Order <strong>{fromOrder.code}</strong> · {fromOrder.customerName} · {fromOrder.quantity} — customer’s settings loaded
+          </span>
+          <a className="link-btn" href={`#/staff/order/${fromOrder.id}`}>Back to order</a>
+        </div>
+      )}
       {body}
       {printersOpen && (
         <PrintersPanel

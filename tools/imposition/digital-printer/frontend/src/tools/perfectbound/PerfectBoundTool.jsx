@@ -3,6 +3,8 @@ import {
   planPerfectBound, getPerfectBoundWarnings, buildBookInsidePdf, buildCoverPdf, cardStartState, makeSavedDefault, defaultKey,
   orientSheet, getSheet, PERFECT_DEFAULTS, readerSpreads, fmtSize, fmtMm, matchStandard,
 } from '@engine';
+import SendOrder from '../../components/SendOrder.jsx';
+import { orderStart, orderExtra } from '../../lib/orderRecipe.js';
 import { store } from '../../lib/storage.js';
 import { downloadBytes } from '../../lib/download.js';
 import Segmented from '../../components/Segmented.jsx';
@@ -27,7 +29,7 @@ const KEY_KIND = 'perfectbound';
 export default function PerfectBoundTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters,
+  printers, printer, onPrinter, onManagePrinters, initial = null,
 }) {
   const { geometry, pdf } = job;
   const savedDefault = (p) => store.get('cardDefaults', {})[defaultKey(p.id, KEY_KIND)] || null;
@@ -46,10 +48,10 @@ export default function PerfectBoundTool({
     return s;
   };
 
-  const [start] = useState(() => startFor(printer));
+  const [start] = useState(() => orderStart(initial, startFor(printer)));
   const [base, setBase] = useState(start.base);
   const [overrides, setOverrides] = useState(start.overrides);
-  const [book, setBook] = useState(() => ({ ...PERFECT_DEFAULTS, ...store.get('bookStyle', {}) }));
+  const [book, setBook] = useState(() => orderExtra(initial, 'book', { ...PERFECT_DEFAULTS, ...store.get('bookStyle', {}) }));
   const [view, setView] = useState('reader');
   const [sheetIndex, setSheetIndex] = useState(0);
   const [side, setSide] = useState(0);
@@ -275,6 +277,17 @@ export default function PerfectBoundTool({
             <button type="button" className="primary" onClick={() => download('inside')} disabled={!plan.perSheet || !!downloading}>
               {downloading === 'inside' ? 'Building PDF…' : `Download inside pages (${plan.pdfPages} pages)`}
             </button>
+            {!initial && (
+              <SendOrder
+                job={job}
+                tool="perfectbound"
+                title={`${std ? `${std.name} book` : 'Book'}, ${plan.insidePages} inside pages`}
+                quantity={book.copies}
+                recipe={{ v: 1, tool: 'perfectbound', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { book } }}
+                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: plan.perSheet, sheets: plan.pressSheets, pages: plan.pages, spine: plan.spine }}
+                disabled={!plan.perSheet}
+              />
+            )}
             {plan.cover.enabled && (
               <button type="button" className="ghost-btn wide-btn" onClick={() => download('cover')} disabled={!plan.cover.layout || !!downloading}>
                 {downloading === 'cover' ? 'Building PDF…' : 'Download cover PDF'}

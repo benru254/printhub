@@ -9,7 +9,12 @@ export default function StartScreen({ onFiles, busy, error }) {
       </p>
       <FileDrop onFiles={onFiles} busy={busy} />
       {error && <p className="error">{error}</p>}
-      <p className="privacy">Your file stays on this device. Nothing is uploaded.</p>
+      <p className="privacy">Your file stays on this device until you choose “Send to the shop”.</p>
+      <nav className="start-links">
+        <a href="#/track">Track an order</a>
+        <span aria-hidden>·</span>
+        <a href="#/staff">Staff login</a>
+      </nav>
     </main>
   );
 }

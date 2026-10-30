@@ -4,6 +4,8 @@ import {
   cardStartState, makeSavedDefault, defaultKey, computeArtFit, itemAt, canvasAngle, NUMBERING_DEFAULTS,
   fmtSize, fmtMm, COPY_NAME_SIZE, PART_NAMES,
 } from '@engine';
+import SendOrder from '../../components/SendOrder.jsx';
+import { orderStart, orderExtra } from '../../lib/orderRecipe.js';
 import { useRenders } from '../../hooks/useRenders.js';
 import { store } from '../../lib/storage.js';
 import { downloadBytes } from '../../lib/download.js';
@@ -44,18 +46,18 @@ const defaultsKeyFor = (printerId, kind) => defaultKey(printerId, `cutstack:${ki
 export default function CutStackTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters,
+  printers, printer, onPrinter, onManagePrinters, initial = null,
 }) {
   const { geometry, pdf, imageInfo } = job;
   const original = detectProduct(geometry.pages[0].trimMm, geometry.pageCount);
   const savedDefault = () => store.get('cardDefaults', {})[defaultsKeyFor(printer.id, original.kind)] || null;
 
-  const [start] = useState(() => cardStartState(printer, savedDefault()));
+  const [start] = useState(() => orderStart(initial, cardStartState(printer, savedDefault())));
   const [base, setBase] = useState(start.base);
   const [overrides, setOverrides] = useState(start.overrides);
-  const [mode, setMode] = useState(() => defaultMode(geometry));
-  const [numbering, setNumbering] = useState(() => ({ ...NUMBERING_DEFAULTS, ...loadStyle() }));
-  const [view, setView] = useState(() => (defaultMode(geometry) === 'number' ? 'place' : 'sheet'));
+  const [mode, setMode] = useState(() => orderExtra(initial, 'mode', defaultMode(geometry)));
+  const [numbering, setNumbering] = useState(() => orderExtra(initial, 'numbering', { ...NUMBERING_DEFAULTS, ...loadStyle() }));
+  const [view, setView] = useState(() => (orderExtra(initial, 'mode', defaultMode(geometry)) === 'number' ? 'place' : 'sheet'));
   const [side, setSide] = useState(0);
   const [sheetIndex, setSheetIndex] = useState(0);
   const [showStacks, setShowStacks] = useState(true);
@@ -379,6 +381,17 @@ export default function CutStackTool({
             <button type="button" className="primary" onClick={download} disabled={!perSheet || downloading}>
               {downloading ? `Building PDF (${plan.pages} pages)…` : `Download print-ready PDF (${plan.pages} pages)`}
             </button>
+            {!initial && (
+              <SendOrder
+                job={job}
+                tool="cutstack"
+                title={mode === 'number' ? `Numbered ${original.label.toLowerCase()}` : original.label}
+                quantity={total}
+                recipe={{ v: 1, tool: 'cutstack', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { mode, numbering } }}
+                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: sheet.label, perSheet, sheets, pages: geometry.pageCount }}
+                disabled={!perSheet}
+              />
+            )}
             <FileDrop onFiles={onFiles} busy={busy} compact />
           </div>
         </section>

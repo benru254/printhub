@@ -1,7 +1,7 @@
-# Backend (not started yet)
+# Backend
 
-Planned for a later part:
-- Express API that imports the same `../engine` folder, so app, API and bots give identical results
-- PostgreSQL: printer profiles, saved defaults, customer jobs (original file + settings "recipe")
-- Operator access to customer jobs
-- WhatsApp / Telegram bot endpoints
+Orders, tracking, staff accounts and customer files are handled by the shared PrintHub server
+in [`/server`](../../../../server/README.md), because every tool uses them.
+
+Tool-specific server code (for example building PDFs on the server for WhatsApp/Telegram bots,
+using `../engine`) will go here later.
