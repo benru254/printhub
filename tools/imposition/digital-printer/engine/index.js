@@ -15,6 +15,8 @@ export * from './core/artFit.js';
 export * from './core/marks.js';
 export * from './core/safeZone.js';
 export * from './core/makeBleed.js';
+export * from './core/pdfPieces.js';
 export * from './core/testSheet.js';
 
 export * from './tools/cards/index.js';
+export * from './tools/cutstack/index.js';

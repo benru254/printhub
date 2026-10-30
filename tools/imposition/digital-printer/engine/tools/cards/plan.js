@@ -36,21 +36,31 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
   const availBleed = madeBleed ? MAX_BLEED : sourceBleed;
   const settings = resolveSettings(base, overrides, { availBleed, printer, twoSided });
 
-  const layoutFor = (sheet) =>
+  const layoutWithGap = (sheet, gap) =>
     computeStepRepeat({
       sheetW: sheet.w,
       sheetH: sheet.h,
       itemW: out.w,
       itemH: out.h,
       margins: settings.margins,
-      gap: settings.gap,
+      gap,
       bleed: settings.bleedUsed,
       marks: settings.marks,
       allowRotate: settings.allowRotate,
     });
 
+  // Smart gap: without bleed, pieces may share one cut line (gap 0) when that fits more.
+  // Only on auto: a gap the user typed is always kept.
+  const layoutFor = (sheet) => {
+    const normal = layoutWithGap(sheet, settings.gap);
+    if (overrides.gap !== undefined || settings.bleedUsed > 0 || settings.gap === 0) return normal;
+    const shared = layoutWithGap(sheet, 0);
+    return shared.count > normal.count ? { ...shared, sharedToFit: true } : normal;
+  };
+
   const sheet = orientSheet(getSheet(base.sheet, customSheets), base.orientation);
   const layout = layoutFor(sheet);
+  if (layout.gap !== settings.gap) settings.gap = layout.gap; // show the gap really used
   const resized = Math.abs(out.w - first.trimMm.w) > 0.05 || Math.abs(out.h - first.trimMm.h) > 0.05;
 
   return {

@@ -8,6 +8,7 @@ import Header from './components/Header.jsx';
 import StartScreen from './screens/StartScreen.jsx';
 import OverviewScreen from './screens/OverviewScreen.jsx';
 import CardsTool from './tools/cards/CardsTool.jsx';
+import CutStackTool from './tools/cutstack/CutStackTool.jsx';
 import PrintersPanel from './printers/PrintersPanel.jsx';
 
 // Screens: start (choose file) -> overview (your file + choose a tool) -> tool
@@ -102,10 +103,11 @@ export default function App() {
   let body;
   if (!job || screen === 'start') {
     body = <StartScreen onFiles={handleFiles} busy={busy} error={error} />;
-  } else if (screen === 'tool' && tool === 'cards') {
+  } else if (screen === 'tool' && (tool === 'cards' || tool === 'cutstack')) {
+    const Tool = tool === 'cutstack' ? CutStackTool : CardsTool;
     body = (
-      <CardsTool
-        key={job.id}
+      <Tool
+        key={`${tool}-${job.id}`}
         job={job}
         onBack={() => setScreen('overview')}
         onFiles={handleFiles}

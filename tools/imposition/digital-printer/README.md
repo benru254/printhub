@@ -6,6 +6,9 @@ Print size / resizing (Fill, Fit, Stretch), sheets A6–A2 + Letter + custom siz
 **Part 3:** Printer profiles (margins per side, sheets, default sheet, double-sided, book/calendar flip), margin test sheet,
 "Save as my default" per product and printer, safe zone check (exact text check for PDFs + picture check for detail near the edge).
 **Part 4:** Make bleed (Auto / Mirror / Stretch / Off): creates missing 3 mm bleed; the real design stays sharp vector inside the cut.
+**Part 5:** Numbered books & tickets (cut & stack): numbering (start, count, digits, prefix, colour, style, drag to place, ticket stubs),
+books of 25/50/100, duplicate/triplicate NCR copies (in sets or by colour), "pages in order" for many-page files, step-by-step stacking guide.
+Also: smart gap — without bleed, pieces share cut lines when that fits more.
 
 ## Folders
 
@@ -13,6 +16,7 @@ Print size / resizing (Fill, Fit, Stretch), sheets A6–A2 + Letter + custom siz
 |---|---|
 | `engine/core/` | Shared by every tool: sizes, printers, reading PDFs, pictures → PDF, fitting a design to a size, cut marks, safe zone, margin test sheet. |
 | `engine/tools/cards/` | The Cards tool: layout, settings, plan, tips, PDF builder. |
+| `engine/tools/cutstack/` | Numbered books & tickets: cut & stack order, numbering, plan, tips, PDF builder. |
 | `engine/tests/` | Tests for the engine (`npm test`). |
 | `frontend/src/screens/` | Start screen and "Your file" screen. |
 | `frontend/src/tools/` | One folder per tool. `registry.js` lists all tools (ready / soon). |

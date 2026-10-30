@@ -151,8 +151,13 @@ export function getCardWarnings({ plan, geometry, imageInfo, safety }) {
   }
   if (settings.bleedUsed === 0) {
     if (settings.gap === 0) {
-      add('shared-cuts', 'info', 'Pieces share cut lines',
-        'One cut separates two pieces. That makes cutting faster, but a small cutting error shows on both pieces.', true);
+      if (layout.sharedToFit) {
+        add('shared-to-fit', 'info', 'Pieces share cut lines to fit more',
+          `With no gap, ${layout.count} fit instead of fewer. One cut separates two pieces: faster cutting, but a small cutting error shows on both. Set a gap under Advanced to change this.`);
+      } else {
+        add('shared-cuts', 'info', 'Pieces share cut lines',
+          'One cut separates two pieces. That makes cutting faster, but a small cutting error shows on both pieces.', true);
+      }
     }
   }
 

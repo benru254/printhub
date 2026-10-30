@@ -424,3 +424,25 @@ button { -webkit-tap-highlight-color: transparent; }
 /* ---------- Part 4: make bleed ---------- */
 .bleed-status { font-weight: 700; color: var(--warn-ink); }
 .bleed-status.bleed-ok { color: var(--good); }
+
+/* ---------- Part 5: numbered books & tickets (cut & stack) ---------- */
+.number-range { font-size: 17px; color: var(--text); margin-bottom: 10px; }
+.number-range strong { color: var(--accent); }
+.num-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+.num-grid .num, .num-grid .select { width: 100%; }
+.swatch { display: inline-block; width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.4); margin-bottom: 2px; }
+.chip-small { padding: 7px 4px; font-size: 13px; font-weight: 600; }
+.placer-canvas { display: block; touch-action: none; cursor: grab; }
+.placer-tools { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.placer-pick { display: flex; gap: 6px; flex-wrap: wrap; }
+.placer-pick .chip { width: auto; padding: 6px 12px; }
+.placer-actions { display: flex; gap: 14px; flex-wrap: wrap; }
+.sheet-stepper { display: flex; align-items: center; gap: 8px; justify-content: center; color: var(--text); font-weight: 600; }
+.guide-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; color: var(--text); line-height: 1.45; }
+.guide-steps strong { color: var(--accent); }
+.stack-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.stack-chip {
+  padding: 4px 9px; border-radius: 999px; font-size: 13px;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+}
+.stack-chip strong { color: var(--accent); margin-right: 4px; }
