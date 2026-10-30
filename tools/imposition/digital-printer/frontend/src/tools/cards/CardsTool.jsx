@@ -3,6 +3,8 @@ import {
   planCards, countsBySheet, getCardWarnings, buildCardsPdf, detectProduct,
   cardStartState, makeSavedDefault, defaultKey, fmtSize, fmtMm,
 } from '@engine';
+import SendOrder from '../../components/SendOrder.jsx';
+import { orderStart } from '../../lib/orderRecipe.js';
 import { useRenders } from '../../hooks/useRenders.js';
 import { store } from '../../lib/storage.js';
 import { downloadBytes } from '../../lib/download.js';
@@ -31,13 +33,13 @@ const savedDefaultFor = (printerId, kind) => store.get('cardDefaults', {})[defau
 export default function CardsTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters,
+  printers, printer, onPrinter, onManagePrinters, initial = null,
 }) {
   const { geometry, pdf, imageInfo } = job;
   // The kind of product in the file (used for "my default", e.g. business cards).
   const original = detectProduct(geometry.pages[0].trimMm, geometry.pageCount);
 
-  const [start] = useState(() => cardStartState(printer, savedDefaultFor(printer.id, original.kind)));
+  const [start] = useState(() => orderStart(initial, cardStartState(printer, savedDefaultFor(printer.id, original.kind))));
   const [base, setBase] = useState(start.base);
   const [overrides, setOverrides] = useState(start.overrides);
   const [view, setView] = useState('finished');
@@ -290,6 +292,17 @@ export default function CardsTool({
             <button type="button" className="primary" onClick={download} disabled={!layout.count || downloading}>
               {downloading ? 'Building PDF…' : 'Download print-ready PDF'}
             </button>
+            {!initial && (
+              <SendOrder
+                job={job}
+                tool="cards"
+                title={product.label}
+                quantity={safeBase.copies}
+                recipe={{ v: 1, tool: 'cards', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides }}
+                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: layout.count, sheets: plan.sheetsNeeded, pages: geometry.pageCount }}
+                disabled={!layout.count}
+              />
+            )}
             <FileDrop onFiles={onFiles} busy={busy} compact />
           </div>
         </section>

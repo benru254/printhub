@@ -3,6 +3,8 @@ import {
   planBooklet, getBookletWarnings, buildBookletPdf, cardStartState, makeSavedDefault, defaultKey,
   orientSheet, getSheet, BOOKLET_DEFAULTS, fmtSize, fmtMm, matchStandard,
 } from '@engine';
+import SendOrder from '../../components/SendOrder.jsx';
+import { orderStart, orderExtra } from '../../lib/orderRecipe.js';
 import { store } from '../../lib/storage.js';
 import { downloadBytes } from '../../lib/download.js';
 import Segmented from '../../components/Segmented.jsx';
@@ -25,7 +27,7 @@ const KEY_KIND = 'booklet';
 export default function BookletTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters,
+  printers, printer, onPrinter, onManagePrinters, initial = null,
 }) {
   const { geometry, pdf } = job;
   const savedDefault = (p) => store.get('cardDefaults', {})[defaultKey(p.id, KEY_KIND)] || null;
@@ -45,10 +47,10 @@ export default function BookletTool({
     return s;
   };
 
-  const [start] = useState(() => startFor(printer));
+  const [start] = useState(() => orderStart(initial, startFor(printer)));
   const [base, setBase] = useState(start.base);
   const [overrides, setOverrides] = useState(start.overrides);
-  const [booklet, setBooklet] = useState(() => ({ ...BOOKLET_DEFAULTS, ...store.get('bookletStyle', {}) }));
+  const [booklet, setBooklet] = useState(() => orderExtra(initial, 'booklet', { ...BOOKLET_DEFAULTS, ...store.get('bookletStyle', {}) }));
   const [view, setView] = useState('reader');
   const [sheetIndex, setSheetIndex] = useState(0);
   const [side, setSide] = useState(0);
@@ -251,6 +253,17 @@ export default function BookletTool({
             <button type="button" className="primary" onClick={download} disabled={!plan.perSheet || downloading}>
               {downloading ? 'Building PDF…' : `Download print-ready PDF (${plan.pdfPages} pages)`}
             </button>
+            {!initial && (
+              <SendOrder
+                job={job}
+                tool="booklet"
+                title={`${std ? `${std.name} booklet` : 'Booklet'}, ${plan.pages} pages`}
+                quantity={booklet.copies}
+                recipe={{ v: 1, tool: 'booklet', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { booklet } }}
+                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: plan.perSheet, sheets: plan.pressSheets, pages: plan.pages }}
+                disabled={!plan.perSheet}
+              />
+            )}
             <FileDrop onFiles={onFiles} busy={busy} compact />
           </div>
         </section>

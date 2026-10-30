@@ -9,7 +9,12 @@ and pushes them on branches. Copilot does the file and terminal work on Reuben's
   - `engine/` = all maths and PDF building. Pure JavaScript, no React, no browser-only code
     except where a file says so. It will also run on the server and in WhatsApp/Telegram bots.
   - `frontend/` = React + Vite screens. They import the engine only via `@engine`.
-  - `backend/` = empty for now (API + PostgreSQL later).
+  - `backend/` = tool-specific server code (later).
+- Shared server: `server/` (Express 5 + PostgreSQL + files in `server/uploads/`). Setup: `server/README.md`.
+  - Modules: `server/src/modules/<name>/<name>.service.js | .controller.js | .routes.js`.
+  - Database changes: ONLY add to `server/src/schema.js` (CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS).
+  - After pulling server changes: stop and restart `npm run dev` in `server/`.
+  - Never commit `server/.env` or `server/uploads/`. `npm test` in `server/` wipes TEST_DATABASE_URL only.
 - Plain JavaScript (no TypeScript). Node 20+.
 
 ## Every task
