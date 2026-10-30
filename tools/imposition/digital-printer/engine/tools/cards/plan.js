@@ -5,6 +5,7 @@
 import { getSheet, orientSheet } from '../../core/sheets.js';
 import { computeArtFit } from '../../core/artFit.js';
 import { DEFAULT_PRINTER } from '../../core/printers.js';
+import { clampRadius } from '../../core/shapes.js';
 import { computeStepRepeat } from './layout.js';
 import { resolveSettings, MAX_BLEED, STANDARD_BLEED } from './settings.js';
 
@@ -53,7 +54,9 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
   // Only on auto: a gap the user typed is always kept.
   const layoutFor = (sheet) => {
     const normal = layoutWithGap(sheet, settings.gap);
-    if (overrides.gap !== undefined || settings.bleedUsed > 0 || settings.gap === 0) return normal;
+    // Shapes and sticker cutters need space between pieces, so no shared cut lines for them.
+    const straight = (base.shape || 'rect') === 'rect' && base.cutter !== 'plotter';
+    if (!straight || overrides.gap !== undefined || settings.bleedUsed > 0 || settings.gap === 0) return normal;
     const shared = layoutWithGap(sheet, 0);
     return shared.count > normal.count ? { ...shared, sharedToFit: true } : normal;
   };
@@ -76,6 +79,11 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
     settings,
     printer,
     flip: printer.flip || 'book',
+    shape: {
+      shape: ['rounded', 'ellipse'].includes(base.shape) ? base.shape : 'rect',
+      radius: clampRadius(base.radius ?? 3, out.w, out.h),
+      cutter: base.cutter === 'plotter' ? 'plotter' : 'guillotine',
+    },
     sheet,
     layout,
     layoutFor,

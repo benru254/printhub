@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   planCutStack, defaultMode, getCutStackWarnings, buildCutStackPdf, countsBySheet, detectProduct,
   cardStartState, makeSavedDefault, defaultKey, computeArtFit, itemAt, canvasAngle, NUMBERING_DEFAULTS,
-  fmtSize, fmtMm,
+  fmtSize, fmtMm, COPY_NAME_SIZE, PART_NAMES,
 } from '@engine';
 import { useRenders } from '../../hooks/useRenders.js';
 import { store } from '../../lib/storage.js';
@@ -30,7 +30,7 @@ const MODES = [
 ];
 
 // Number style the user picked last time (not the start number or count).
-const STYLE_KEYS = ['prefix', 'suffix', 'digits', 'color', 'font', 'size', 'parts', 'perBook', 'printOrder'];
+const STYLE_KEYS = ['prefix', 'suffix', 'digits', 'color', 'font', 'size', 'parts', 'perBook', 'printOrder', 'copyNames', 'copyNameList'];
 const loadStyle = () => {
   const saved = store.get('numberingStyle', {});
   const style = {};
@@ -59,6 +59,7 @@ export default function CutStackTool({
   const [side, setSide] = useState(0);
   const [sheetIndex, setSheetIndex] = useState(0);
   const [showStacks, setShowStacks] = useState(true);
+  const [previewPart, setPreviewPart] = useState(0); // which copy (white / pink / yellow) the sheet preview shows
   const [downloading, setDownloading] = useState(false);
   const [error, setError] = useState('');
   const [jobDismissed, setJobDismissed] = useState([]);
@@ -133,6 +134,11 @@ export default function CutStackTool({
         for (const pos of plan.numbering.positions) {
           drawNumber(ctx, text, (pos.x - plan.out.w / 2) * k, (pos.y - plan.out.h / 2) * k, k, plan.numbering);
         }
+        if (plan.numbering.copyNames) {
+          const at = plan.numbering.copyNameAt;
+          const name = plan.numbering.copyNameList[Math.min(previewPart, plan.parts - 1)];
+          drawNumber(ctx, name, (at.x - plan.out.w / 2) * k, (at.y - plan.out.h / 2) * k, k, { ...plan.numbering, size: COPY_NAME_SIZE, font: 'bold' });
+        }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       }
       if (showStacks) {
@@ -148,7 +154,7 @@ export default function CutStackTool({
         ctx.fillText(String(index + 1), p.cx * k, p.cy * k + 1);
       }
     },
-    [shownSheet, sheets, total, mode, plan, showStacks]
+    [shownSheet, sheets, total, mode, plan, showStacks, previewPart]
   );
 
   const notes = getCutStackWarnings({ plan, imageInfo, safety }).filter(
@@ -279,6 +285,14 @@ export default function CutStackTool({
             <>
               {plan.twoSided && (
                 <Segmented options={[{ value: 0, label: 'Front' }, { value: 1, label: 'Back' }]} value={side} onChange={setSide} label="Side" />
+              )}
+              {plan.parts > 1 && mode === 'number' && (
+                <Segmented
+                  options={PART_NAMES.slice(0, plan.parts).map((name, i) => ({ value: i, label: `Copy ${i + 1} (${name})` }))}
+                  value={Math.min(previewPart, plan.parts - 1)}
+                  onChange={setPreviewPart}
+                  label="Copy"
+                />
               )}
               {sheets > 1 && (
                 <div className="sheet-stepper">

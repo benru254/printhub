@@ -9,6 +9,7 @@ import StartScreen from './screens/StartScreen.jsx';
 import OverviewScreen from './screens/OverviewScreen.jsx';
 import CardsTool from './tools/cards/CardsTool.jsx';
 import CutStackTool from './tools/cutstack/CutStackTool.jsx';
+import BookletTool from './tools/booklet/BookletTool.jsx';
 import PrintersPanel from './printers/PrintersPanel.jsx';
 
 // Screens: start (choose file) -> overview (your file + choose a tool) -> tool
@@ -103,8 +104,8 @@ export default function App() {
   let body;
   if (!job || screen === 'start') {
     body = <StartScreen onFiles={handleFiles} busy={busy} error={error} />;
-  } else if (screen === 'tool' && (tool === 'cards' || tool === 'cutstack')) {
-    const Tool = tool === 'cutstack' ? CutStackTool : CardsTool;
+  } else if (screen === 'tool' && (tool === 'cards' || tool === 'cutstack' || tool === 'booklet')) {
+    const Tool = { cards: CardsTool, cutstack: CutStackTool, booklet: BookletTool }[tool];
     body = (
       <Tool
         key={`${tool}-${job.id}`}

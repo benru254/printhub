@@ -6,14 +6,14 @@ export const TOOLS = [
   {
     id: 'cards',
     name: 'Cards, labels & stickers',
-    desc: 'Repeat your design across a sheet with cut marks. Change its size if needed.',
+    desc: 'Repeat your design across a sheet. Rounded corners, circles and sticker-cutter lines too.',
     status: 'ready',
   },
   {
     id: 'booklet',
     name: 'Booklet',
-    desc: 'Folded and stapled booklets, pages in the right order.',
-    status: 'soon',
+    desc: 'Folded and stapled booklets: pages in the right order, blank pages and creep handled for you.',
+    status: 'ready',
   },
   {
     id: 'cutstack',

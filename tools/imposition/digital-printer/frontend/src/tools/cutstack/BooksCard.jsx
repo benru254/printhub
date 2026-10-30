@@ -51,6 +51,34 @@ export default function BooksCard({ plan, numbering, onChange }) {
               ? 'Each sheet is printed once per copy, one after the other. Best with pre-collated NCR paper or several paper trays: sets come out ready.'
               : 'All white sheets first, then all pink (then yellow). Best when you load each paper colour by hand.'}
           </p>
+
+          <label className="switch-row spaced">
+            <span>
+              <span className="field-label inline">Print the copy name</span>
+              <span className="hint">Small text under the number, so everyone knows which copy is which.</span>
+            </span>
+            <input type="checkbox" className="switch" checked={!!numbering.copyNames} onChange={(e) => onChange({ copyNames: e.target.checked })} />
+          </label>
+          {numbering.copyNames && (
+            <div className="num-grid">
+              {plan.numbering.copyNameList.slice(0, parts).map((name, i) => (
+                <label key={i} className="ps-field">
+                  <span className="hint">Copy {i + 1} ({['white', 'pink', 'yellow'][i]})</span>
+                  <input
+                    className="num"
+                    type="text"
+                    maxLength={20}
+                    value={(numbering.copyNameList || [])[i] ?? name}
+                    onChange={(e) => {
+                      const list = [...plan.numbering.copyNameList];
+                      list[i] = e.target.value;
+                      onChange({ copyNameList: list });
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

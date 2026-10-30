@@ -7,8 +7,8 @@ customers, full control for trained print operators.
 
 | Tool | Folder | Status |
 |---|---|---|
-| Imposition · Digital printer (cards, labels, stickers, resize, make bleed) | `tools/imposition/digital-printer/` | Working (Parts 1–4) |
-| Canvas editor, t-shirt printing, booklets, numbered books… | `tools/…` | Planned |
+| Imposition · Digital printer (cards, stickers & cut lines, numbered books, booklets, resize, make bleed) | `tools/imposition/digital-printer/` | Working (Parts 1–6) |
+| Canvas editor, t-shirt printing, large format… | `tools/…` | Planned |
 
 Each tool is its own small app with a clear `engine/` (maths + PDF, no screen code),
 `frontend/` (screens) and `backend/` (API, later with PostgreSQL).

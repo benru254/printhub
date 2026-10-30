@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { cropMarks, pieceDrawing, placeOnSheet, mirrorLine, canvasAngle } from '@engine';
+import { cropMarks, pieceDrawing, placeOnSheet, mirrorLine, canvasAngle, shapeOutline, outlineToCanvas } from '@engine';
 import { useWidth } from '../../hooks/useWidth.js';
 
 // Live preview of the press sheet, drawn on a canvas.
@@ -84,12 +84,30 @@ export default function SheetPreview({ plan, renders, side, bleedArt, pieceAt, d
       }
       ctx.restore();
 
-      // Cut line of each piece (screen only, not printed).
+      // Cut line of each piece: dashed blue on screen for a guillotine,
+      // solid magenta for a sticker cutter (that line is in the PDF as CutContour).
+      const sh = plan.shape || { shape: 'rect', cutter: 'guillotine' };
       ctx.save();
-      ctx.setLineDash([3 * dpr, 2 * dpr]);
-      ctx.strokeStyle = 'rgba(0, 170, 230, 0.9)';
-      ctx.lineWidth = dpr;
-      ctx.strokeRect((p.cx - slot.w / 2) * k, (p.cy - slot.h / 2) * k, slot.w * k, slot.h * k);
+      if (sh.shape === 'rect' && sh.cutter !== 'plotter') {
+        ctx.setLineDash([3 * dpr, 2 * dpr]);
+        ctx.strokeStyle = 'rgba(0, 170, 230, 0.9)';
+        ctx.lineWidth = dpr;
+        ctx.strokeRect((p.cx - slot.w / 2) * k, (p.cy - slot.h / 2) * k, slot.w * k, slot.h * k);
+      } else {
+        ctx.translate(p.cx * k, p.cy * k);
+        ctx.rotate(canvasAngle(p.rot));
+        const outline = shapeOutline({ shape: sh.shape, w: plan.out.w, h: plan.out.h, radius: sh.radius });
+        outlineToCanvas(ctx, outline, (x, y) => [(x - plan.out.w / 2) * k, (y - plan.out.h / 2) * k]);
+        if (sh.cutter === 'plotter') {
+          ctx.strokeStyle = '#ff00ff';
+          ctx.lineWidth = Math.max(1, 1.2 * dpr);
+        } else {
+          ctx.setLineDash([3 * dpr, 2 * dpr]);
+          ctx.strokeStyle = 'rgba(0, 170, 230, 0.9)';
+          ctx.lineWidth = dpr;
+        }
+        ctx.stroke();
+      }
       ctx.restore();
 
       if (decorate) {

@@ -16,7 +16,10 @@ export * from './core/marks.js';
 export * from './core/safeZone.js';
 export * from './core/makeBleed.js';
 export * from './core/pdfPieces.js';
+export * from './core/shapes.js';
+export * from './core/cutContour.js';
 export * from './core/testSheet.js';
 
 export * from './tools/cards/index.js';
 export * from './tools/cutstack/index.js';
+export * from './tools/booklet/index.js';

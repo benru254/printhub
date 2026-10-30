@@ -27,7 +27,11 @@ export const NUMBERING_DEFAULTS = {
   parts: 1, // 1 = single, 2 = duplicate, 3 = triplicate (NCR paper)
   perBook: 50, // leaves per book, 0 = not books
   printOrder: 'sets', // 'sets' (copy 1, copy 2, copy 1, copy 2...) or 'grouped' (all copy 1, then all copy 2)
+  copyNames: true, // print the copy's name (ORIGINAL / DUPLICATE...) next to the number (only with 2-3 copies)
+  copyNameList: ['ORIGINAL', 'DUPLICATE', 'TRIPLICATE'],
 };
+
+export const COPY_NAME_SIZE = 6.5; // points
 
 export const PART_NAMES = ['white', 'pink', 'yellow'];
 
@@ -58,6 +62,17 @@ export function defaultPosition(out, box, safe) {
 export function secondPosition(out, box, safe) {
   const inset = Math.max(safe, 3) + 1;
   return { x: Math.min(out.w - box.w / 2, inset + box.w / 2), y: Math.max(box.h / 2, out.h - inset - box.h / 2) };
+}
+
+/**
+ * Where the copy name goes: centred just under the first number,
+ * or just above it when there is no room under it.
+ */
+export function copyNamePosition(numberPos, numberBox, out) {
+  const h = (COPY_NAME_SIZE * 0.7 * 25.4) / 72;
+  const below = numberPos.y + numberBox.h / 2 + 1.2 + h / 2;
+  const y = below + h / 2 <= out.h - 1 ? below : numberPos.y - numberBox.h / 2 - 1.2 - h / 2;
+  return { x: numberPos.x, y };
 }
 
 export function clampPosition(pos, out, box) {

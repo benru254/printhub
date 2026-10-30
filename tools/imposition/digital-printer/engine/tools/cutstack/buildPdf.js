@@ -9,7 +9,7 @@ import { mmToPt } from '../../core/units.js';
 import { computeArtFit } from '../../core/artFit.js';
 import { embedPiece, drawPieceAt, drawCropMarks, drawTextOnPiece } from '../../core/pdfPieces.js';
 import { itemAt } from './order.js';
-import { NUMBER_COLORS, PART_NAMES } from './numbering.js';
+import { NUMBER_COLORS, PART_NAMES, COPY_NAME_SIZE } from './numbering.js';
 
 const SLUG_GREY = rgb(0.45, 0.45, 0.45);
 
@@ -30,6 +30,7 @@ export async function buildCutStackPdf({ sourceBytes, plan, title = 'Cut and sta
 
   const numFont = await out.embedFont(numbering.font === 'machine' ? StandardFonts.CourierBold : StandardFonts.HelveticaBold);
   const slugFont = await out.embedFont(StandardFonts.Helvetica);
+  const nameFont = await out.embedFont(StandardFonts.HelveticaBold);
   const color = (NUMBER_COLORS[numbering.color] || NUMBER_COLORS.red).pdf;
   const { sheetW, sheetH } = layout;
   const ctx = (isBack) => ({ isBack, sheetW, sheetH, flip, out: size });
@@ -74,6 +75,10 @@ export async function buildCutStackPdf({ sourceBytes, plan, title = 'Cut and sta
         const text = numbering.format(item);
         for (const at of numbering.positions) {
           drawTextOnPiece(page, slot, { text, font: numFont, size: numbering.size, color, at }, ctx(false));
+        }
+        const name = numbering.copyNames ? numbering.copyNameList[part] : '';
+        if (name) {
+          drawTextOnPiece(page, slot, { text: name, font: nameFont, size: COPY_NAME_SIZE, color, at: numbering.copyNameAt }, ctx(false));
         }
       }
     }

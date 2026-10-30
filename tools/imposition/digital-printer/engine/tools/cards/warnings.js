@@ -94,7 +94,7 @@ export function getCardWarnings({ plan, geometry, imageInfo, safety }) {
       `We assume ${printer.name} can't print the outer ${fmtMm(printerMin)} mm of the paper. Print the margin test sheet (Printers → Edit) and enter the real numbers for exact layouts.`, true);
   }
 
-  if (!settings.marks) {
+  if (!settings.marks && !(plan.shape && plan.shape.cutter === 'plotter')) {
     add('marks-off', 'caution', 'Cut marks are off',
       'Cut marks show the person cutting exactly where each piece ends. Without them they have to guess, and pieces can come out uneven. Turn them off only if your printer or cutter adds its own.');
   }
@@ -169,6 +169,29 @@ export function getCardWarnings({ plan, geometry, imageInfo, safety }) {
   if (sides.some((p) => p.rotation !== 0)) {
     add('page-rotated', 'caution', 'This file has rotated pages',
       'The preview shows the page without its rotation setting. Check the preview carefully before printing.');
+  }
+
+  // ----- Shape and cutting -----
+  const shape = plan.shape || { shape: 'rect', cutter: 'guillotine' };
+  if (shape.cutter === 'guillotine' && shape.shape === 'rounded') {
+    add('corner-cutter', 'info', 'Round the corners after cutting',
+      `A guillotine cuts straight lines. After cutting, round each corner with a corner cutter (radius ${fmtMm(shape.radius)} mm), or choose Sticker cutter.`);
+  }
+  if (shape.cutter === 'guillotine' && shape.shape === 'ellipse') {
+    add('ellipse-guillotine', 'caution', 'A guillotine can\'t cut circles',
+      'Choose Sticker cutter so the cutter follows the round line, or cut them with a round punch.');
+  }
+  if (shape.cutter === 'plotter') {
+    add('plotter-how', 'info', 'How the sticker cutter works',
+      'The cut line is in the PDF as the spot colour "CutContour". Print & cut programs (VersaWorks, Onyx, Flexi, Summa, Graphtec) send it to the cutter. For Silhouette or Cricut, download the SVG cut file. Leave about 15 mm around the sheet for the cutter\'s registration marks.', true);
+    if (settings.bleedUsed === 0 && plan.inkTouches) {
+      add('plotter-no-bleed', 'caution', 'Stickers without bleed',
+        'Cutters can move 0.5–1 mm. With colour to the edge and no bleed, thin white edges may show. Use Make bleed.');
+    }
+    if (twoSided) {
+      add('plotter-two-sided', 'info', 'Cut line on the front only',
+        'The cutter reads the front of the sheet, so the cut line is only on the front.');
+    }
   }
 
   // ----- Front and back -----
