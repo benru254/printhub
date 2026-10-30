@@ -27,10 +27,16 @@ export default function App() {
   const printer = printers.find((p) => p.id === activeId) || printers[0];
 
   // Free the old file's memory when a new one is loaded.
-  useEffect(() => () => job && job.pdf.destroy(), [job]);
+  useEffect(() => {
+    return () => {
+      if (job) job.pdf.destroy();
+    };
+  }, [job]);
 
   // Start each screen at the top.
-  useEffect(() => window.scrollTo(0, 0), [screen, tool]);
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screen, tool]);
 
   async function handleFiles(files) {
     setError('');
