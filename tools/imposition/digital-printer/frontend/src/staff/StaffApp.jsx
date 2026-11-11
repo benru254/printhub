@@ -5,6 +5,7 @@ import StaffLogin from './StaffLogin.jsx';
 import OrderList from './OrderList.jsx';
 import OrderDetail from './OrderDetail.jsx';
 import StaffManager from './StaffManager.jsx';
+import ShopSettings from './ShopSettings.jsx';
 
 // The operator side: #/staff (orders), #/staff/order/12, #/staff/team (admin).
 export default function StaffApp({ path, onOpenInTool }) {
@@ -23,7 +24,7 @@ export default function StaffApp({ path, onOpenInTool }) {
   if (!me) return <StaffLogin onLoggedIn={setMe} />;
 
   const orderMatch = /^order\/(\d+)$/.exec(path);
-  const section = path === 'team' ? 'team' : 'orders';
+  const section = path === 'team' || path === 'shop' ? path : 'orders';
   const go = (p) => {
     window.location.hash = p ? `#/staff/${p}` : '#/staff';
   };
@@ -45,9 +46,9 @@ export default function StaffApp({ path, onOpenInTool }) {
       </div>
       {me.role === 'admin' && !orderMatch && (
         <Segmented
-          options={[{ value: 'orders', label: 'Orders' }, { value: 'team', label: 'Staff' }]}
+          options={[{ value: 'orders', label: 'Orders' }, { value: 'shop', label: 'Shop & prices' }, { value: 'team', label: 'Staff' }]}
           value={section}
-          onChange={(v) => go(v === 'team' ? 'team' : '')}
+          onChange={(v) => go(v === 'orders' ? '' : v)}
           label="Section"
         />
       )}
@@ -55,6 +56,8 @@ export default function StaffApp({ path, onOpenInTool }) {
         <OrderDetail id={Number(orderMatch[1])} me={me} onBack={() => go('')} onOpenInTool={onOpenInTool} />
       ) : section === 'team' && me.role === 'admin' ? (
         <StaffManager me={me} />
+      ) : section === 'shop' && me.role === 'admin' ? (
+        <ShopSettings />
       ) : (
         <OrderList onOpen={(id) => go(`order/${id}`)} />
       )}

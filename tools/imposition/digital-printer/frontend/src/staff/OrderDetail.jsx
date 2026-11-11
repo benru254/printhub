@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api, STATUS_LABELS, ORDER_TOOLS, formatWhen } from '../lib/api.js';
 import { downloadBytes } from '../lib/download.js';
+import { formatMoney } from '@engine';
+import MoneyCard from './MoneyCard.jsx';
+import JobTicket from './JobTicket.jsx';
 
 const NEXT = ['checking', 'needs_customer', 'approved', 'printing', 'ready', 'collected', 'cancelled'];
 
@@ -12,6 +15,9 @@ const EVENT_TEXT = {
   assigned: (d) => (d.to ? 'Assigned' : 'Unassigned'),
   file: (d) => `File added (${d.kind}): ${d.name}`,
   edited: (d) => `Changed ${d.field}${d.to !== undefined ? ` to ${d.to}` : ''}`,
+  price: (d) => `Price changed: ${formatMoney(d.from)} → ${formatMoney(d.to)}`,
+  payment: (d) => `Payment received: ${formatMoney(d.amount)} (${d.method === 'mpesa' ? 'M-Pesa' : d.method})`,
+  refund: (d) => `Refund given: ${formatMoney(d.amount)}`,
 };
 
 function sizeText(bytes) {
@@ -82,9 +88,25 @@ export default function OrderDetail({ id, me, onBack, onOpenInTool }) {
           {s.sheets ? ` · ${s.sheets} sheets` : ''}
           {order.recipe?.printer?.name ? ` · set for “${order.recipe.printer.name}”` : ''}
         </p>
+        <p className="hint">
+          {s.paper ? `${s.paper} · ${s.colour === false ? 'black & white' : 'colour'}${s.laminate && s.laminate !== 'none' ? ` · ${s.laminate} lamination` : ''}` : ''}
+        </p>
         <p className="hint">Sent {formatWhen(order.createdAt)}{order.assignedName ? ` · ${order.assignedName} is on it` : ''}</p>
         {order.notes && <p className="customer-notes">“{order.notes}”</p>}
+        <div className="contact-row due-row">
+          <label className="hint" htmlFor="od-due">Needed by</label>
+          <input
+            id="od-due"
+            className="num"
+            type="date"
+            value={order.dueAt ? new Date(order.dueAt).toLocaleDateString('en-CA') : ''}
+            onChange={(e) => act('due', () => api(`/orders/${id}`, { method: 'PATCH', auth: true, json: { dueAt: e.target.value ? `${e.target.value}T17:00:00` : null } }))}
+          />
+          <button type="button" className="ghost-btn" onClick={() => window.print()}>Print job ticket</button>
+        </div>
       </div>
+
+      <JobTicket order={order} />
 
       <div className="card">
         <div className="field-label">{order.customerName}</div>
@@ -141,6 +163,8 @@ export default function OrderDetail({ id, me, onBack, onOpenInTool }) {
           ))}
         </div>
       </div>
+
+      <MoneyCard order={order} onChange={setOrder} />
 
       <div className="card">
         <div className="field-label">Status</div>

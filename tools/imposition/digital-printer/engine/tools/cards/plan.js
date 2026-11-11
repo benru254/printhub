@@ -99,7 +99,8 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
     layoutFor,
     resized,
     twoSided,
-    sheetsNeeded: layout.count ? Math.ceil(settings.copies / layout.count) : 0,
+    // Always at least 1 piece, even if the number box held nothing or a letter.
+    sheetsNeeded: layout.count ? Math.ceil(Math.max(1, Math.floor(Number(settings.copies)) || 1) / layout.count) : 0,
   };
 }
 

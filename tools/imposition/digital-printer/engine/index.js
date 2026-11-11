@@ -25,3 +25,5 @@ export * from './tools/cards/index.js';
 export * from './tools/cutstack/index.js';
 export * from './tools/booklet/index.js';
 export * from './tools/perfectbound/index.js';
+export * from './core/straighten.js';
+export * from './core/pricing.js';

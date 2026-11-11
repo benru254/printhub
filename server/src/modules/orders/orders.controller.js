@@ -7,7 +7,9 @@ export async function create(req, res) {
   let info = null;
   try {
     info = await acceptUpload(req.file);
-    res.status(201).json(await orders.createOrder(req.body || {}, info));
+    const result = await orders.createOrder(req.body || {}, info);
+    if (result.replay) await discardUpload({ path: info.fullPath }); // sent twice: keep only the first file
+    res.status(result.replay ? 200 : 201).json(result);
   } catch (e) {
     // The order was not saved: don't keep its file.
     await discardUpload(info ? { path: info.fullPath } : req.file);

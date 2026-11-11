@@ -2,7 +2,7 @@
 //   - one PDF                -> used as it is
 //   - one or more pictures   -> one page per picture (2 pictures = front + back)
 
-import { imagesToPdf, readImageDpi, readJpegOrientation, sniffFormat } from '@engine';
+import { imagesToPdf, readImageDpi, readJpegOrientation, sniffFormat, straightenPdf } from '@engine';
 
 const MAX_MB = 80; // phones run out of memory on bigger files
 const MAX_IMAGES = 20;
@@ -31,7 +31,9 @@ export async function loadFiles(fileList) {
   }
 
   if (pdfs.length) {
-    return { name: baseName(pdfs[0].file.name), sourceType: 'pdf', fileSize: total, fileCount: 1, bytes: pdfs[0].bytes, imageInfo: null };
+    // Pages stored sideways are turned upright, so what you see is what gets printed.
+    const { bytes } = await straightenPdf(pdfs[0].bytes);
+    return { name: baseName(pdfs[0].file.name), sourceType: 'pdf', fileSize: total, fileCount: 1, bytes, imageInfo: null };
   }
 
   if (pictures.length > MAX_IMAGES) throw new Error(`Choose up to ${MAX_IMAGES} pictures at a time.`);

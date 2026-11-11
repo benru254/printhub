@@ -81,6 +81,44 @@ const STATEMENTS = [
     data JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`,
+
+  // ---- Part 9: shop settings, prices and the money ledger ----
+
+  // Shop-wide settings, one row per key: 'shop' (name, WhatsApp), 'priceList', 'printers'.
+  `CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_by_staff_id INTEGER REFERENCES staff(id),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+
+  // The price worked out when the order was sent (lines, discount, total) and what it was priced from.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS quote JSONB`,
+  // A random key from the customer's phone, so a double tap or a retry never makes two orders.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_key TEXT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS orders_client_key_idx ON orders (client_key) WHERE client_key IS NOT NULL`,
+  // When the customer wants it.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS due_at TIMESTAMPTZ`,
+
+  // MONEY IS A LEDGER. Rows are only ever added, never changed or deleted.
+  //   charge  = what the customer owes (the first one is the estimate; a price change adds
+  //             another charge for the difference, which can be negative)
+  //   payment = money received        refund = money given back
+  // An order's price, paid amount and balance are always worked out from these rows.
+  `CREATE TABLE IF NOT EXISTS order_ledger (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL REFERENCES orders(id),
+    kind TEXT NOT NULL CHECK (kind IN ('charge', 'payment', 'refund')),
+    amount_cents BIGINT NOT NULL,
+    method TEXT,
+    reference TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    staff_id INTEGER REFERENCES staff(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS order_ledger_order_idx ON order_ledger (order_id)`,
+  // The same M-Pesa code can never be recorded twice.
+  `CREATE UNIQUE INDEX IF NOT EXISTS order_ledger_reference_idx ON order_ledger (method, upper(reference)) WHERE kind = 'payment' AND reference IS NOT NULL AND reference <> ''`,
 ];
 
 export async function migrate() {

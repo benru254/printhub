@@ -39,3 +39,11 @@ and pushes them on branches. Copilot does the file and terminal work on Reuben's
 - Don't commit `node_modules/`, `dist/` or `.env` files.
 - Don't use AGPL libraries (e.g. MuPDF, Ghostscript) without asking: they can force the
   whole product to become open source. MIT/Apache libraries (pdf-lib, PDF.js, Konva) are fine.
+
+## Added in Part 9 (keep these rules)
+- Prices: ONE module, `tools/imposition/digital-printer/engine/core/pricing.js`. The app and the server both import it. Do not copy price maths anywhere else.
+- Money: only ADD rows to `order_ledger` (see `server/src/modules/money/`). Never UPDATE or DELETE a ledger row, and never store a price or balance on the order.
+- Simple / Pro: customers see Simple. Anything about sheets, margins, printers or bleed goes behind `ctx.pro` in the tool, and its tutor note id goes in `PRO_ONLY_NOTES` (`frontend/src/lib/mode.js`).
+- Every tool shows `<OrderPanel>` (paper, finish, price, send / save to order). A new tool must pass it a `spec` (sheets, sides, cut, binding) and `outputs`.
+- Screens change with `go(screen, tool)` in `App.jsx` so the phone's Back button works. Do not call `setScreen` directly.
+- `frontend/sw.template.js` + the `offlineApp` plugin in `vite.config.js` make the offline app. `/api` must never be cached.

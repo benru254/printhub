@@ -1,9 +1,12 @@
-// Top bar. The printer button opens the printer settings from any screen.
-export default function Header({ printer, onPrinters }) {
+// Top bar. Simple / Pro switch for everyone; the printer button (Pro only) opens the printer settings.
+export default function Header({ printer, onPrinters, pro, onTogglePro, shopName }) {
   return (
     <header className="header">
-      <span className="logo">PrintHub</span>
-      <span className="header-tool">Imposition · Digital printer</span>
+      <a className="logo" href="#/">{shopName && shopName !== 'PrintHub' ? shopName : 'PrintHub'}</a>
+      <span className="header-tool">{pro ? 'Imposition · Digital printer' : 'Print it yourself'}</span>
+      <button type="button" className={`mode-switch ${pro ? 'mode-on' : ''}`} onClick={onTogglePro} aria-pressed={pro} title={pro ? 'Pro: all print-shop settings are shown' : 'Simple: only what a customer needs'}>
+        {pro ? 'Pro' : 'Simple'}
+      </button>
       {printer && (
         <button type="button" className="header-printer" onClick={onPrinters} title="Printer settings">
           <svg viewBox="0 0 24 24" aria-hidden className="header-printer-icon">

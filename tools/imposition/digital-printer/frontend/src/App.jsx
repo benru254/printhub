@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { readPdfGeometry } from '@engine';
 import { loadFiles } from './lib/loadFiles.js';
 import { openPdf } from './lib/pdfRender.js';
@@ -7,13 +7,22 @@ import { loadPrinters, savePrinters } from './lib/printers.js';
 import Header from './components/Header.jsx';
 import StartScreen from './screens/StartScreen.jsx';
 import OverviewScreen from './screens/OverviewScreen.jsx';
-import CardsTool from './tools/cards/CardsTool.jsx';
-import CutStackTool from './tools/cutstack/CutStackTool.jsx';
-import BookletTool from './tools/booklet/BookletTool.jsx';
-import PerfectBoundTool from './tools/perfectbound/PerfectBoundTool.jsx';
-import PrintersPanel from './printers/PrintersPanel.jsx';
-import TrackScreen from './screens/TrackScreen.jsx';
-import StaffApp from './staff/StaffApp.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
+import { useShop } from './lib/shop.js';
+import { startsPro, PRO_ONLY_NOTES } from './lib/mode.js';
+import { staffToken } from './lib/api.js';
+import { saveLastJob, readLastJob, clearLastJob } from './lib/jobStore.js';
+
+// Loaded only when opened, so the first screen appears faster on a phone.
+const TOOLS = {
+  cards: lazy(() => import('./tools/cards/CardsTool.jsx')),
+  cutstack: lazy(() => import('./tools/cutstack/CutStackTool.jsx')),
+  booklet: lazy(() => import('./tools/booklet/BookletTool.jsx')),
+  perfectbound: lazy(() => import('./tools/perfectbound/PerfectBoundTool.jsx')),
+};
+const PrintersPanel = lazy(() => import('./printers/PrintersPanel.jsx'));
+const TrackScreen = lazy(() => import('./screens/TrackScreen.jsx'));
+const StaffApp = lazy(() => import('./staff/StaffApp.jsx'));
 
 // #/track/PH-XXXXXX = customer tracking, #/staff... = operator side, anything else = the tool.
 function readRoute() {
@@ -38,14 +47,49 @@ export default function App() {
   const [printersOpen, setPrintersOpen] = useState(false);
   const [route, setRoute] = useState(readRoute);
   const [fromOrder, setFromOrder] = useState(null); // { id, code, customerName, quantity, recipe } when opened from an order
+  const [pro, setPro] = useState(startsPro); // Simple (customers) or Pro (the shop): see lib/mode.js
+  const [resume, setResume] = useState(null); // the file from last time, if the phone kept it
+  const shop = useShop();
 
   useEffect(() => {
-    const onHash = () => setRoute(readRoute());
+    const onHash = () => {
+      setRoute(readRoute());
+      if (staffToken.get()) setPro(true); // staff always work in Pro
+    };
+    // The phone's Back button moves between our screens instead of leaving the app.
+    const onPop = (e) => {
+      setRoute(readRoute());
+      setScreen((e.state && e.state.screen) || 'start');
+      setTool((e.state && e.state.tool) || null);
+    };
     window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
+    window.addEventListener('popstate', onPop);
+    readLastJob().then((saved) => saved && saved.bytes && setResume(saved));
+    return () => {
+      window.removeEventListener('hashchange', onHash);
+      window.removeEventListener('popstate', onPop);
+    };
   }, []);
 
-  const printer = printers.find((p) => p.id === activeId) || printers[0];
+  function go(nextScreen, nextTool = null) {
+    setScreen(nextScreen);
+    setTool(nextTool);
+    // Always lands on the tool side of the app (leaving #/staff or #/track if we were there).
+    window.history.pushState({ screen: nextScreen, tool: nextTool }, '', '#/');
+    setRoute({ name: 'main' });
+  }
+
+  function togglePro() {
+    store.set('proMode', !pro);
+    setPro(!pro);
+  }
+
+  // Customers (Simple) plan on the shop's own printer when the shop has published it,
+  // so "how many fit on a sheet" and the price are the real ones.
+  const usingShop = !pro && shop.printers.length > 0;
+  const shownPrinters = usingShop ? shop.printers : printers;
+  const shownSheets = usingShop ? shop.customSheets : customSheets;
+  const printer = shownPrinters.find((p) => p.id === activeId) || shownPrinters[0];
 
   // Free the old file's memory when a new one is loaded.
   useEffect(() => {
@@ -59,17 +103,18 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [screen, tool]);
 
-  async function handleFiles(files) {
+  // files = picked files, or { saved } = the file kept from last time.
+  async function handleFiles(files, { keep = true, then = 'overview', thenTool = null } = {}) {
     setError('');
     setBusy(true);
     try {
-      const loaded = await loadFiles(files);
+      const loaded = files.saved || (await loadFiles(files));
       const geometry = await readPdfGeometry(loaded.bytes);
       const pdf = await openPdf(loaded.bytes);
       setJob({ ...loaded, geometry, pdf, id: Date.now() });
-      setTool(null);
-      setScreen('overview');
       setFromOrder(null);
+      go(then, thenTool);
+      if (keep && !files.saved) saveLastJob(loaded).then(() => setResume(loaded));
       return true;
     } catch (e) {
       setError(e.message || 'Something went wrong reading this file.');
@@ -82,16 +127,15 @@ export default function App() {
   // Operator: open an order's file in its tool, set up the way the customer chose.
   async function openOrder(order, blob, fileName) {
     const file = new File([blob], fileName || `${order.code}.pdf`, { type: blob.type || 'application/pdf' });
-    window.location.hash = '';
-    if (!(await handleFiles([file]))) return;
     const recipe = order.recipe && order.recipe.tool ? order.recipe : { tool: order.tool };
+    // A customer's file is not kept as "your last file" on the shop computer.
+    if (!(await handleFiles([file], { keep: false, then: 'tool', thenTool: recipe.tool }))) return;
     setFromOrder({ id: order.id, code: order.code, customerName: order.customerName, quantity: order.quantity, recipe });
-    setTool(recipe.tool);
-    setScreen('tool');
   }
 
   const tips = {
-    dismissed,
+    // In Simple, tips meant for the person running the printer are never shown.
+    dismissed: pro ? dismissed : [...dismissed, ...PRO_ONLY_NOTES],
     dismiss(id) {
       const next = [...dismissed, id];
       setDismissed(next);
@@ -140,23 +184,34 @@ export default function App() {
   } else if (route.name === 'staff') {
     body = <StaffApp path={route.path} onOpenInTool={openOrder} />;
   } else if (!job || screen === 'start') {
-    body = <StartScreen onFiles={handleFiles} busy={busy} error={error} />;
-  } else if (screen === 'tool' && (tool === 'cards' || tool === 'cutstack' || tool === 'booklet' || tool === 'perfectbound')) {
-    const Tool = { cards: CardsTool, cutstack: CutStackTool, booklet: BookletTool, perfectbound: PerfectBoundTool }[tool];
+    body = (
+      <StartScreen
+        onFiles={handleFiles}
+        busy={busy}
+        error={error}
+        shop={shop.shop}
+        resume={resume}
+        onResume={() => handleFiles({ saved: resume })}
+        onForget={() => clearLastJob().then(() => setResume(null))}
+      />
+    );
+  } else if (screen === 'tool' && TOOLS[tool]) {
+    const Tool = TOOLS[tool];
     body = (
       <Tool
         key={`${tool}-${job.id}`}
         job={job}
         initial={fromOrder && fromOrder.recipe.tool === tool ? fromOrder.recipe : null}
-        onBack={() => setScreen('overview')}
+        ctx={{ pro, shop, order: fromOrder && fromOrder.recipe.tool === tool ? fromOrder : null }}
+        onBack={() => window.history.back()}
         onFiles={handleFiles}
         busy={busy}
         loadError={error}
         tips={tips}
-        customSheets={customSheets}
+        customSheets={shownSheets}
         onAddCustomSheet={addCustomSheet}
         onRemoveCustomSheet={removeCustomSheet}
-        printers={printers}
+        printers={shownPrinters}
         printer={printer}
         onPrinter={choosePrinter}
         onManagePrinters={() => setPrintersOpen('edit')}
@@ -166,14 +221,11 @@ export default function App() {
     body = (
       <OverviewScreen
         job={job}
-        onOpenTool={(id) => {
-          setTool(id);
-          setScreen('tool');
-        }}
+        onOpenTool={(id) => go('tool', id)}
         onFiles={handleFiles}
         busy={busy}
         error={error}
-        customSheets={customSheets}
+        customSheets={shownSheets}
         printer={printer}
       />
     );
@@ -181,7 +233,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header printer={printer} onPrinters={() => setPrintersOpen('list')} />
+      <Header printer={pro ? printer : null} onPrinters={() => setPrintersOpen('list')} pro={pro} onTogglePro={togglePro} shopName={shop.shop.name} />
       {fromOrder && route.name === 'main' && job && (
         <div className="order-banner">
           <span>
@@ -190,8 +242,11 @@ export default function App() {
           <a className="link-btn" href={`#/staff/order/${fromOrder.id}`}>Back to order</a>
         </div>
       )}
-      {body}
-      {printersOpen && (
+      <ErrorBoundary key={`${route.name}-${screen}-${tool}`}>
+        <Suspense fallback={<main className="start"><p className="hint">Loading…</p></main>}>{body}</Suspense>
+      </ErrorBoundary>
+      {printersOpen && pro && (
+        <Suspense fallback={null}>
         <PrintersPanel
           printers={printers}
           activeId={printer.id}
@@ -201,6 +256,7 @@ export default function App() {
           onClose={() => setPrintersOpen(false)}
           startEditing={printersOpen === 'edit'}
         />
+        </Suspense>
       )}
     </div>
   );

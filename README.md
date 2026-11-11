@@ -7,8 +7,8 @@ customers, full control for trained print operators.
 
 | Tool | Folder | Status |
 |---|---|---|
-| Imposition · Digital printer (cards, stickers & contour cut lines, numbered books, booklets, glued books, resize, make bleed) | `tools/imposition/digital-printer/` | Working (Parts 1–7) |
-| Orders server (customers send jobs, operator checks them, staff accounts) | `server/` | Working (Part 8), see [server/README.md](server/README.md) |
+| Imposition · Digital printer (cards, stickers & contour cut lines, numbered books, booklets, glued books, resize, make bleed) | `tools/imposition/digital-printer/` | Working (Parts 1–9) |
+| Orders server (orders, staff, shop settings, price list, money ledger) | `server/` | Working (Parts 8–9), see [server/README.md](server/README.md) |
 | Canvas editor, t-shirt printing, large format… | `tools/…` | Planned |
 
 Each tool is its own small app with a clear `engine/` (maths + PDF, no screen code),

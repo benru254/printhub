@@ -523,3 +523,66 @@ a.ghost-btn { text-decoration: none; display: inline-block; }
 .note-form { display: flex; gap: 8px; margin-top: 8px; }
 .note-form .num { flex: 1; }
 .order-banner { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 16px; background: var(--info-bg); color: var(--info-ink); border-bottom: 1px solid var(--info-line); }
+
+/* ---------- Part 9: Simple/Pro, prices, money, job ticket ---------- */
+a.logo { text-decoration: none; }
+.mode-switch { margin-left: auto; padding: 5px 12px; border-radius: 999px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.mode-switch.mode-on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.mode-switch + .header-printer { margin-left: 8px; }
+.resume { display: grid; gap: 6px; margin-top: 12px; justify-items: center; }
+.resume small { color: var(--muted); background: transparent; font-weight: 400; }
+.as-btn-link { text-decoration: none; text-align: center; display: block; }
+.primary.slim { width: auto; padding: 10px 18px; }
+
+.price-card { display: grid; gap: 8px; }
+.price-options { display: grid; gap: 8px; margin-top: 4px; }
+.chips-2 { grid-template-columns: repeat(2, 1fr); }
+.chips-3 { grid-template-columns: repeat(3, 1fr); }
+.price-box { margin-top: 6px; padding: 12px 14px; border-radius: var(--radius); background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+.price-total { width: 100%; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 0; border: 0; cursor: pointer; font: inherit; background: transparent; color: var(--text); }
+.price-total strong { font-size: 26px; color: var(--accent); background: transparent; }
+.price-lines, .ledger { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.price-lines li, .ledger li { display: flex; justify-content: space-between; gap: 12px; color: var(--text); background: transparent; }
+.price-lines small, .ledger small { color: var(--muted); background: transparent; }
+.price-less { color: var(--good) !important; }
+.ledger { border-top: 1px solid var(--line); padding-top: 10px; }
+
+.money-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 10px; margin: 8px 0; }
+.money-row > div { display: grid; gap: 2px; color: var(--text); background: transparent; }
+.money-row strong { font-size: 18px; color: var(--text); background: transparent; }
+.money-owed strong, span.money-owed { color: var(--warn-ink); background: transparent; }
+.money-clear strong, span.money-clear { color: var(--good); background: transparent; }
+.money-form { margin-top: 4px; }
+.money-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; }
+.order-row-money { display: flex; justify-content: space-between; gap: 10px; }
+.due-late { color: var(--risk-ink); background: transparent; font-weight: 700; }
+.due-row { align-items: center; }
+.note-warn { margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-line); }
+.price-field { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; color: var(--text); background: transparent; }
+.price-field small { color: var(--muted); background: transparent; }
+.price-field .num { width: 130px; flex: none; }
+.price-field:has(input:not([type='number'])) { flex-direction: column; align-items: stretch; }
+.price-field:has(input:not([type='number'])) .num { width: 100%; }
+.paper-row { display: grid; grid-template-columns: minmax(0, 1fr) 78px auto; gap: 8px; margin-top: 8px; align-items: center; }
+.paper-row label .num { width: 76px; display: inline-block; }
+.price-example { margin: 14px 0 10px; padding: 10px 12px; border-radius: 8px; background: var(--info-bg); color: var(--info-ink); border: 1px solid var(--info-line); }
+
+/* The job ticket only exists on paper. */
+.ticket { display: none; }
+@media print {
+  body, .app { background: #ffffff !important; color: #000000 !important; }
+  .header, .order-banner, .staff-bar, .staff-detail > *:not(.ticket), .seg, .segmented { display: none !important; }
+  .staff, .staff-detail { display: block; max-width: none; padding: 0; margin: 0; }
+  .ticket { display: block; color: #000000; background: #ffffff; font-size: 13pt; padding: 8mm; }
+  .ticket-head { display: flex; justify-content: space-between; border-bottom: 2pt solid #000000; padding-bottom: 4mm; }
+  .ticket-code { font-size: 30pt; font-weight: 800; letter-spacing: 0.05em; }
+  .ticket-due { text-align: right; }
+  .ticket-due strong { font-size: 18pt; display: block; }
+  .ticket-table { width: 100%; border-collapse: collapse; margin-top: 5mm; }
+  .ticket-table th, .ticket-table td { text-align: left; padding: 2mm 0; border-bottom: 0.5pt solid #999999; color: #000000; background: #ffffff; }
+  .ticket-table th { width: 38%; font-weight: 600; }
+  .ticket-notes, .ticket-money { margin-top: 5mm; }
+  .ticket-checks { display: flex; flex-wrap: wrap; gap: 4mm 8mm; margin-top: 6mm; }
+  .ticket-checks i { display: inline-block; width: 4.5mm; height: 4.5mm; border: 1pt solid #000000; vertical-align: -1mm; }
+  .ticket-sign { margin-top: 12mm; }
+}
