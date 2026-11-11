@@ -25,17 +25,21 @@ export function cornerFor(p, cyPdf) {
  * Prepares one source page for drawing many times.
  * bleedArt: { bytes, format } picture of piece + made bleed (or null).
  */
+// False for a page with nothing on it (Word and scanners make these).
+export function hasContent(pdfPage) {
+  return !!pdfPage.node.Contents();
+}
+
 export async function embedPiece(outDoc, srcDoc, { page, fit, effBleed, out, bleedArt = null }) {
   const useMade = !!bleedArt && effBleed > 0;
   // With made bleed the real design is cut at the trim; the picture gives the bleed.
   const d = pieceDrawing(fit, useMade ? 0 : effBleed, page);
   const b = d.srcBoxPt;
-  const embedded = await outDoc.embedPage(srcDoc.getPage(page.index), {
-    left: b.x,
-    bottom: b.y,
-    right: b.x + b.width,
-    top: b.y + b.height,
-  });
+  // An empty page (nothing drawn on it) cannot be embedded: it simply prints as blank paper.
+  const source = srcDoc.getPage(page.index);
+  const embedded = hasContent(source)
+    ? await outDoc.embedPage(source, { left: b.x, bottom: b.y, right: b.x + b.width, top: b.y + b.height })
+    : null;
   let art = null;
   let artDrawing = null;
   if (useMade) {
@@ -58,6 +62,7 @@ export function drawPieceAt(sheet, piece, slot, { isBack, sheetW, sheetH, flip }
       rotate: degrees(pa.rot),
     });
   }
+  if (!piece.embedded) return; // empty page
   const p = placeOnSheet(slot, piece.d, isBack, sheetW, sheetH, flip);
   const [x, y] = cornerFor(p, sheetH - p.cy);
   sheet.drawPage(piece.embedded, {

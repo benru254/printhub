@@ -3,7 +3,7 @@ import {
   planBooklet, getBookletWarnings, buildBookletPdf, cardStartState, makeSavedDefault, defaultKey,
   orientSheet, getSheet, BOOKLET_DEFAULTS, fmtSize, fmtMm, matchStandard,
 } from '@engine';
-import SendOrder from '../../components/SendOrder.jsx';
+import OrderPanel from '../../components/OrderPanel.jsx';
 import { orderStart, orderExtra } from '../../lib/orderRecipe.js';
 import { store } from '../../lib/storage.js';
 import { downloadBytes } from '../../lib/download.js';
@@ -27,7 +27,7 @@ const KEY_KIND = 'booklet';
 export default function BookletTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters, initial = null,
+  printers, printer, onPrinter, onManagePrinters, initial = null, ctx,
 }) {
   const { geometry, pdf } = job;
   const savedDefault = (p) => store.get('cardDefaults', {})[defaultKey(p.id, KEY_KIND)] || null;
@@ -136,12 +136,18 @@ export default function BookletTool({
     },
   };
 
+  // The print-ready PDF and its file name (downloaded, or saved straight to an order).
+  async function buildOutput() {
+    const bytes = await buildBookletPdf({ sourceBytes: job.bytes, plan, title: `${job.name} - booklet` });
+    return { bytes, name: `${job.name}_booklet_${plan.pages}pp_${plan.perSheet}up_${plan.sheet.label}${plan.sheet.orientation === 'landscape' ? '-L' : ''}.pdf` };
+  }
+
   async function download() {
     setDownloading(true);
     setError('');
     try {
-      const bytes = await buildBookletPdf({ sourceBytes: job.bytes, plan, title: `${job.name} - booklet` });
-      downloadBytes(bytes, `${job.name}_booklet_${plan.pages}pp_${plan.perSheet}up_${plan.sheet.label}${plan.sheet.orientation === 'landscape' ? '-L' : ''}.pdf`);
+      const out = await buildOutput();
+      downloadBytes(out.bytes, out.name);
     } catch (e) {
       setError(e.message || 'Could not build the PDF.');
     } finally {
@@ -213,57 +219,69 @@ export default function BookletTool({
             </div>
           )}
 
-          <SheetCard
-            base={safeBase}
-            onChange={update}
-            counts={counts}
-            customSheets={customSheets}
-            onAddCustom={(s) => {
-              onAddCustomSheet(s);
-              update({ sheet: s.id });
-            }}
-            onRemoveCustom={(id) => {
-              onRemoveCustomSheet(id);
-              if (safeBase.sheet === id) update({ sheet: printer.defaultSheet });
-            }}
-            printers={printers}
-            printer={printer}
-            onPrinter={onPrinter}
-            onManagePrinters={onManagePrinters}
-          />
+          {ctx.pro && (
+            <SheetCard
+              base={safeBase}
+              onChange={update}
+              counts={counts}
+              customSheets={customSheets}
+              onAddCustom={(s) => {
+                onAddCustomSheet(s);
+                update({ sheet: s.id });
+              }}
+              onRemoveCustom={(id) => {
+                onRemoveCustomSheet(id);
+                if (safeBase.sheet === id) update({ sheet: printer.defaultSheet });
+              }}
+              printers={printers}
+              printer={printer}
+              onPrinter={onPrinter}
+              onManagePrinters={onManagePrinters}
+            />
+          )}
 
-          <AdvancedPanel
-            settings={plan.settings}
-            overrides={overrides}
-            setOverrides={(next) => {
-              setOverrides(next);
-              setView('sheet');
-            }}
-            onResetTips={() => {
-              tips.reset();
-              setJobDismissed([]);
-            }}
-            printerName={printer.name}
-            defaults={defaults}
-          />
+          {ctx.pro && (
+            <AdvancedPanel
+              settings={plan.settings}
+              overrides={overrides}
+              setOverrides={(next) => {
+                setOverrides(next);
+                setView('sheet');
+              }}
+              onResetTips={() => {
+                tips.reset();
+                setJobDismissed([]);
+              }}
+              printerName={printer.name}
+              defaults={defaults}
+            />
+          )}
 
           {(error || loadError) && <p className="error">{error || loadError}</p>}
 
+          <OrderPanel
+            ctx={ctx}
+            job={job}
+            tool="booklet"
+            title={`${std ? `${std.name} booklet` : 'Booklet'}, ${plan.pages} pages`}
+            quantity={booklet.copies}
+            recipe={{ v: 1, tool: 'booklet', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { booklet } }}
+            summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: plan.perSheet, sheets: plan.pressSheets, pages: plan.pages }}
+            spec={{
+              groups: [{ label: 'Printing', sheets: plan.pressSheets, sheetW: plan.sheet.w, sheetH: plan.sheet.h, sides: 2, gsm: plan.paper.gsm }],
+              cut: 'guillotine',
+              books: plan.copies,
+              binding: 'staple',
+            }}
+            outputs={[{ kind: 'imposed', label: 'print-ready PDF', build: buildOutput }]}
+            initial={initial}
+            disabled={!plan.perSheet}
+          />
+
           <div className="actions">
-            <button type="button" className="primary" onClick={download} disabled={!plan.perSheet || downloading}>
+            <button type="button" className={ctx.pro && !ctx.order ? 'primary' : 'ghost-btn wide-btn'} onClick={download} disabled={!plan.perSheet || downloading}>
               {downloading ? 'Building PDF…' : `Download print-ready PDF (${plan.pdfPages} pages)`}
             </button>
-            {!initial && (
-              <SendOrder
-                job={job}
-                tool="booklet"
-                title={`${std ? `${std.name} booklet` : 'Booklet'}, ${plan.pages} pages`}
-                quantity={booklet.copies}
-                recipe={{ v: 1, tool: 'booklet', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { booklet } }}
-                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: plan.perSheet, sheets: plan.pressSheets, pages: plan.pages }}
-                disabled={!plan.perSheet}
-              />
-            )}
             <FileDrop onFiles={onFiles} busy={busy} compact />
           </div>
         </section>

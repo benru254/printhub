@@ -194,3 +194,84 @@ test('a deactivated account stops working at once', async () => {
   await call('PATCH', `/staff/${kevin.id}`, { token: admin, json: { active: false } });
   assert.equal((await call('GET', '/orders', { token: operator })).status, 401);
 });
+
+// ---------- Part 9: shop settings, prices, money ledger ----------
+
+const SPEC = { groups: [{ label: 'Printing', sheets: 5, sheetW: 320, sheetH: 450, sides: 1 }], cut: 'guillotine' };
+let paidOrderId;
+let paidCode;
+
+test('shop: anyone reads it, only the admin changes it', async () => {
+  const pub = await call('GET', '/shop');
+  assert.equal(pub.status, 200);
+  assert.equal(pub.body.priceList.example, true);
+  assert.equal((await call('PUT', '/shop', { json: { shop: { name: 'X' } } })).status, 401);
+  const bad = await call('PUT', '/shop', { token: admin, json: { priceList: { papers: [] } } });
+  assert.equal(bad.status, 400);
+  const list = { ...pub.body.priceList, minOrder: 500, papers: pub.body.priceList.papers.map((p) => (p.id === 'card300' ? { ...p, priceA3: 40 } : p)) };
+  const ok = await call('PUT', '/shop', { token: admin, json: { shop: { name: 'Dispatch Print', whatsapp: '0712 000 111', turnaroundDays: 1 }, priceList: list } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.shop.whatsapp, '+254712000111');
+  assert.equal(ok.body.priceList.example, false);
+  assert.equal(ok.body.priceList.minOrder, 500);
+});
+
+test('the server prices the order from its own price list', async () => {
+  const key = 'test-key-0123456789abcdef';
+  const form = () => orderForm({ phone: '0733 111 222', name: 'Brian O', priceSpec: JSON.stringify(SPEC), priceOptions: JSON.stringify({ paper: 'card300', colour: true, laminate: 'none', total: 1 }), clientKey: key });
+  const r = await call('POST', '/orders', { form: form() });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  // 5 SRA3 sheets x (40 paper + 30 print) x 1.154 area = 404 + cutting 110 = 514 -> rounded up to 520
+  assert.equal(r.body.estimate.total, 520);
+  paidCode = r.body.code;
+  // Same key again (double tap): same order, no second one.
+  const again = await call('POST', '/orders', { form: form() });
+  assert.equal(again.status, 200);
+  assert.equal(again.body.code, paidCode);
+  const list = await call('GET', '/orders?q=Brian', { token: admin });
+  assert.equal(list.body.orders.length, 1);
+  paidOrderId = list.body.orders[0].id;
+  assert.equal(list.body.orders[0].total, 520);
+  assert.equal(list.body.orders[0].paid, 0);
+});
+
+test('money is a ledger: price change, payments, refund, balance', async () => {
+  const price = await call('PUT', `/orders/${paidOrderId}/price`, { token: admin, json: { amount: 600, note: 'Added matt lamination' } });
+  assert.equal(price.body.order.money.total, 600);
+  assert.equal(price.body.order.money.entries.length, 2); // estimate + the difference
+  assert.equal(price.body.order.money.entries[1].amount, 80);
+
+  const noCode = await call('POST', `/orders/${paidOrderId}/payments`, { token: admin, json: { amount: 300, method: 'mpesa' } });
+  assert.equal(noCode.status, 400);
+  const pay = await call('POST', `/orders/${paidOrderId}/payments`, { token: admin, json: { amount: 300, method: 'mpesa', reference: 'tka1b2c3d4' } });
+  assert.equal(pay.status, 201, JSON.stringify(pay.body));
+  assert.equal(pay.body.order.money.paid, 300);
+  assert.equal(pay.body.order.money.balance, 300);
+  // The same M-Pesa code cannot be used twice.
+  const dup = await call('POST', `/orders/${orderId}/payments`, { token: admin, json: { amount: 50, method: 'mpesa', reference: 'TKA1B2C3D4' } });
+  assert.equal(dup.status, 400);
+  assert.match(dup.body.error, new RegExp(paidCode));
+
+  await call('POST', `/orders/${paidOrderId}/payments`, { token: admin, json: { amount: 300, method: 'cash' } });
+  const tooMuch = await call('POST', `/orders/${paidOrderId}/payments`, { token: admin, json: { kind: 'refund', amount: 700, method: 'cash' } });
+  assert.equal(tooMuch.status, 400);
+  const refund = await call('POST', `/orders/${paidOrderId}/payments`, { token: admin, json: { kind: 'refund', amount: 100, method: 'cash' } });
+  assert.equal(refund.body.order.money.paid, 500);
+  assert.equal(refund.body.order.money.balance, 100);
+
+  // The customer sees price, paid and balance, but not the ledger notes.
+  const t = (await call('GET', `/orders/track/${paidCode}?phone=0733111222`)).body.order;
+  assert.deepEqual(t.money, { total: 600, paid: 500, balance: 100 });
+  assert.ok(t.events.some((e) => e.kind === 'payment' && e.amount === 300));
+
+  const sum = (await call('GET', '/money/summary', { token: admin })).body.summary;
+  assert.equal(sum.received, 600);
+  assert.equal(sum.refunded, 100);
+  assert.equal(sum.owedByCustomers, 100);
+});
+
+test('answers carry safety headers and are never cached', async () => {
+  const r = await call('GET', '/health');
+  assert.equal(r.res.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(r.res.headers.get('cache-control'), 'no-store');
+});

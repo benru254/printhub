@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { formatMoney } from '@engine';
 import { api, formatWhen } from '../lib/api.js';
 import { store } from '../lib/storage.js';
 
@@ -55,11 +56,28 @@ export default function TrackScreen({ code: startCode = '' }) {
           <div className="order-code small">{order.code}</div>
           <div className="track-title">{order.title} · {order.quantity}</div>
           <div className={`status-pill status-${order.status}`}>{order.statusText}</div>
+          {order.money && order.money.total > 0 && (
+            <div className="money-row">
+              <div><span className="hint">Price</span><strong>{formatMoney(order.money.total, order.currency)}</strong></div>
+              <div><span className="hint">Paid</span><strong>{formatMoney(order.money.paid, order.currency)}</strong></div>
+              <div className={order.money.balance > 0 ? 'money-owed' : 'money-clear'}>
+                <span className="hint">To pay</span><strong>{formatMoney(Math.max(0, order.money.balance), order.currency)}</strong>
+              </div>
+            </div>
+          )}
+          {order.dueAt && <p className="hint">Needed by {new Date(order.dueAt).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short' })}</p>}
           <ol className="timeline">
             {[...order.events].reverse().map((e, i) => (
               <li key={i} className="timeline-item">
                 <span className="timeline-when">{formatWhen(e.at)}</span>
-                <span className="timeline-what">{e.statusText || (e.kind === 'message' ? 'Message from the shop' : 'Update')}</span>
+                <span className="timeline-what">
+                  {e.statusText ||
+                    (e.kind === 'message' ? 'Message from the shop'
+                      : e.kind === 'payment' ? `Payment received: ${formatMoney(e.amount, order.currency)}`
+                      : e.kind === 'refund' ? `Refund: ${formatMoney(e.amount, order.currency)}`
+                      : e.kind === 'price' ? `Price confirmed: ${formatMoney(e.amount, order.currency)}`
+                      : 'Update')}
+                </span>
                 {e.message && <span className="timeline-msg">{e.message}</span>}
               </li>
             ))}

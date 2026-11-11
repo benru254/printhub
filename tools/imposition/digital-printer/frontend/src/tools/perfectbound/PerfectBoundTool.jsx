@@ -3,7 +3,7 @@ import {
   planPerfectBound, getPerfectBoundWarnings, buildBookInsidePdf, buildCoverPdf, cardStartState, makeSavedDefault, defaultKey,
   orientSheet, getSheet, PERFECT_DEFAULTS, readerSpreads, fmtSize, fmtMm, matchStandard,
 } from '@engine';
-import SendOrder from '../../components/SendOrder.jsx';
+import OrderPanel from '../../components/OrderPanel.jsx';
 import { orderStart, orderExtra } from '../../lib/orderRecipe.js';
 import { store } from '../../lib/storage.js';
 import { downloadBytes } from '../../lib/download.js';
@@ -29,7 +29,7 @@ const KEY_KIND = 'perfectbound';
 export default function PerfectBoundTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters, initial = null,
+  printers, printer, onPrinter, onManagePrinters, initial = null, ctx,
 }) {
   const { geometry, pdf } = job;
   const savedDefault = (p) => store.get('cardDefaults', {})[defaultKey(p.id, KEY_KIND)] || null;
@@ -152,18 +152,23 @@ export default function PerfectBoundTool({
     },
   };
 
+  // The inside-pages PDF or the cover PDF, with its file name (downloaded, or saved straight to an order).
+  async function buildOutput(which) {
+    const sheetTag = (s) => `${s.label}${s.orientation === 'landscape' ? '-L' : ''}`;
+    if (which === 'inside') {
+      const bytes = await buildBookInsidePdf({ sourceBytes: job.bytes, plan, title: `${job.name} - inside pages` });
+      return { bytes, name: `${job.name}_book-inside_${plan.pages}pp_sig${plan.signature}_${sheetTag(plan.sheet)}.pdf` };
+    }
+    const bytes = await buildCoverPdf({ sourceBytes: job.bytes, plan, title: `${job.name} - cover` });
+    return { bytes, name: `${job.name}_book-cover_spine${fmtMm(plan.spine)}mm_${sheetTag(plan.cover.sheet)}.pdf` };
+  }
+
   async function download(which) {
     setDownloading(which);
     setError('');
     try {
-      const sheetTag = (s) => `${s.label}${s.orientation === 'landscape' ? '-L' : ''}`;
-      if (which === 'inside') {
-        const bytes = await buildBookInsidePdf({ sourceBytes: job.bytes, plan, title: `${job.name} - inside pages` });
-        downloadBytes(bytes, `${job.name}_book-inside_${plan.pages}pp_sig${plan.signature}_${sheetTag(plan.sheet)}.pdf`);
-      } else {
-        const bytes = await buildCoverPdf({ sourceBytes: job.bytes, plan, title: `${job.name} - cover` });
-        downloadBytes(bytes, `${job.name}_book-cover_spine${fmtMm(plan.spine)}mm_${sheetTag(plan.cover.sheet)}.pdf`);
-      }
+      const out = await buildOutput(which);
+      downloadBytes(out.bytes, out.name);
     } catch (e) {
       setError(e.message || 'Could not build the PDF.');
     } finally {
@@ -237,57 +242,77 @@ export default function PerfectBoundTool({
             </div>
           )}
 
-          <SheetCard
-            base={safeBase}
-            onChange={update}
-            counts={counts}
-            customSheets={customSheets}
-            onAddCustom={(s) => {
-              onAddCustomSheet(s);
-              update({ sheet: s.id });
-            }}
-            onRemoveCustom={(id) => {
-              onRemoveCustomSheet(id);
-              if (safeBase.sheet === id) update({ sheet: printer.defaultSheet });
-            }}
-            printers={printers}
-            printer={printer}
-            onPrinter={onPrinter}
-            onManagePrinters={onManagePrinters}
-          />
+          {ctx.pro && (
+            <SheetCard
+              base={safeBase}
+              onChange={update}
+              counts={counts}
+              customSheets={customSheets}
+              onAddCustom={(s) => {
+                onAddCustomSheet(s);
+                update({ sheet: s.id });
+              }}
+              onRemoveCustom={(id) => {
+                onRemoveCustomSheet(id);
+                if (safeBase.sheet === id) update({ sheet: printer.defaultSheet });
+              }}
+              printers={printers}
+              printer={printer}
+              onPrinter={onPrinter}
+              onManagePrinters={onManagePrinters}
+            />
+          )}
 
-          <AdvancedPanel
-            settings={plan.settings}
-            overrides={overrides}
-            setOverrides={(next) => {
-              setOverrides(next);
-              setView('sheet');
-            }}
-            onResetTips={() => {
-              tips.reset();
-              setJobDismissed([]);
-            }}
-            printerName={printer.name}
-            defaults={defaults}
-          />
+          {ctx.pro && (
+            <AdvancedPanel
+              settings={plan.settings}
+              overrides={overrides}
+              setOverrides={(next) => {
+                setOverrides(next);
+                setView('sheet');
+              }}
+              onResetTips={() => {
+                tips.reset();
+                setJobDismissed([]);
+              }}
+              printerName={printer.name}
+              defaults={defaults}
+            />
+          )}
 
           {(error || loadError) && <p className="error">{error || loadError}</p>}
 
+          <OrderPanel
+            ctx={ctx}
+            job={job}
+            tool="perfectbound"
+            title={`${std ? `${std.name} book` : 'Book'}, ${plan.insidePages} inside pages`}
+            quantity={book.copies}
+            recipe={{ v: 1, tool: 'perfectbound', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { book } }}
+            summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: plan.perSheet, sheets: plan.pressSheets, pages: plan.pages, spine: plan.spine }}
+            spec={{
+              groups: [
+                { label: 'Inside pages', sheets: plan.pressSheets, sheetW: plan.sheet.w, sheetH: plan.sheet.h, sides: 2, gsm: plan.paper.gsm, noLaminate: true },
+                ...(plan.cover.enabled && plan.cover.layout
+                  ? [{ label: 'Cover', sheets: plan.coverSets, sheetW: plan.cover.sheet.w, sheetH: plan.cover.sheet.h, sides: 1, gsm: plan.cover.paper.gsm }]
+                  : []),
+              ],
+              cut: 'guillotine',
+              books: plan.copies,
+              binding: 'glue',
+            }}
+            outputs={[
+              { kind: 'imposed', label: 'inside pages', build: () => buildOutput('inside') },
+              ...(plan.cover.enabled && plan.cover.layout ? [{ kind: 'imposed', label: 'cover', build: () => buildOutput('cover') }] : []),
+            ]}
+            initial={initial}
+            disabled={!plan.perSheet}
+          />
+
           <div className="actions">
-            <button type="button" className="primary" onClick={() => download('inside')} disabled={!plan.perSheet || !!downloading}>
+            <button type="button" className={ctx.pro && !ctx.order ? 'primary' : 'ghost-btn wide-btn'} onClick={() => download('inside')} disabled={!plan.perSheet || !!downloading}>
               {downloading === 'inside' ? 'Building PDF…' : `Download inside pages (${plan.pdfPages} pages)`}
             </button>
-            {!initial && (
-              <SendOrder
-                job={job}
-                tool="perfectbound"
-                title={`${std ? `${std.name} book` : 'Book'}, ${plan.insidePages} inside pages`}
-                quantity={book.copies}
-                recipe={{ v: 1, tool: 'perfectbound', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { book } }}
-                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: plan.perSheet, sheets: plan.pressSheets, pages: plan.pages, spine: plan.spine }}
-                disabled={!plan.perSheet}
-              />
-            )}
             {plan.cover.enabled && (
               <button type="button" className="ghost-btn wide-btn" onClick={() => download('cover')} disabled={!plan.cover.layout || !!downloading}>
                 {downloading === 'cover' ? 'Building PDF…' : 'Download cover PDF'}

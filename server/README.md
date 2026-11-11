@@ -64,6 +64,22 @@ Also copy the `uploads` folder to another disk or cloud drive.
 | staff | `POST /api/orders/:id/files`, `GET /api/orders/:id/files/:fileId` | add a fixed or print-ready file; download |
 | staff | `GET /api/customers?q=`, `GET /api/customers/:id` | customers and their orders |
 | admin | `GET/POST /api/staff`, `PATCH /api/staff/:id` | add staff, switch off, reset password, role |
+| anyone | `GET /api/shop` | shop name, WhatsApp, price list, published printers |
+| admin | `PUT /api/shop` (`shop`, `priceList`, `printers`) | change them (written to `staff_events`) |
+| staff | `PUT /api/orders/:id/price` (`amount`, `note`) | set the final price (adds a ledger line for the difference) |
+| staff | `POST /api/orders/:id/payments` (`kind` payment/refund, `amount`, `method`, `reference`) | record money in or out |
+| staff | `GET /api/money/summary?from=&to=` | money received (by method) and what customers still owe |
+
+## Money rules
+- `order_ledger` is the only place money lives. Rows are **added, never edited or deleted**. A mistake is fixed with a new row.
+- An order's price, paid amount and balance are always worked out from those rows (`modules/money/money.service.js`).
+- The price of a new order is worked out **on the server** from the shop's price list, with the same code the app uses to show the price (`tools/imposition/digital-printer/engine/core/pricing.js`). Never trust a price sent by a phone.
+- An M-Pesa code can be recorded only once across all orders.
+- Sending an order twice with the same `clientKey` returns the first order (no duplicates).
+
+## Offline app
+`npm run build` in the tool folder writes `dist/sw.js`, which lets phones open the app with no internet.
+Browsers only allow this on **https** (or on `localhost`). It starts working for customers once the app is hosted with https.
 
 ## Rules for changing this code
 - Each module has its own folder: `src/modules/<name>/<name>.service.js` (logic and SQL), `.controller.js` (HTTP) and `.routes.js`.

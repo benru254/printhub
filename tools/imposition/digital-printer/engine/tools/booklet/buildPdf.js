@@ -7,7 +7,7 @@
 import { PDFDocument, degrees, rgb } from 'pdf-lib';
 import { mmToPt, PT_PER_MM } from '../../core/units.js';
 import { placeOnSheet } from '../../core/artFit.js';
-import { cornerFor, drawCropMarks, REGISTRATION } from '../../core/pdfPieces.js';
+import { cornerFor, drawCropMarks, hasContent, REGISTRATION } from '../../core/pdfPieces.js';
 
 const FOLD_GREY = rgb(0.45, 0.45, 0.45);
 
@@ -28,6 +28,7 @@ export async function drawSpreadHalf(pdfPage, sourceIndex, half, shift, p, ctx) 
   const left = half < 0 ? t.x - toSrc(bleed) : t.x + toSrc(shift);
   const right = half < 0 ? t.x + t.width - toSrc(shift) : t.x + t.width + toSrc(bleed);
   const box = { left, right, bottom: t.y - toSrc(bleed), top: t.y + t.height + toSrc(bleed) };
+  if (!hasContent(src.getPage(sourceIndex))) return; // an empty page prints as blank paper
   const embedded = await out.embedPage(src.getPage(sourceIndex), box);
 
   const drawnW = W + bleed - shift; // mm

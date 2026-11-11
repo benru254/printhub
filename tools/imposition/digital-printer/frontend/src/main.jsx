@@ -8,3 +8,10 @@ createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 );
+
+// Offline: keep the app's files on the phone (only in the built app, and only on https or localhost).
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}

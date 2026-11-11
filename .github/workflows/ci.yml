@@ -1,0 +1,50 @@
+# Runs every test on every push and pull request, so a broken change is caught before it is merged.
+name: Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    name: Print tools (engine tests + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/imposition/digital-printer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  server:
+    name: Orders server (API tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: printhub
+          POSTGRES_PASSWORD: printhub
+          POSTGRES_DB: printhub_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U printhub" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://printhub:printhub@localhost:5432/printhub_test
+      DATABASE_URL: postgres://printhub:printhub@localhost:5432/printhub
+      JWT_SECRET: ci-only-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The server prices orders with the app's pricing module, which has no packages of its own.
+      - run: npm ci
+        working-directory: server
+      - run: npm test
+        working-directory: server

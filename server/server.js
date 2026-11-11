@@ -14,7 +14,18 @@ try {
 await migrate();
 
 const app = createApp();
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   console.log(`PrintHub API running on http://localhost:${config.port}/api/health`);
   console.log(`Files are saved in ${config.uploadDir}`);
 });
+
+// Ctrl+C or a restart: finish the requests in progress, then close the database cleanly.
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  process.on(signal, () => {
+    server.close(async () => {
+      await pool.end().catch(() => {});
+      process.exit(0);
+    });
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}

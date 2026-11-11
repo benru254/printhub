@@ -3,7 +3,7 @@ import {
   planCards, countsBySheet, getCardWarnings, buildCardsPdf, detectProduct,
   cardStartState, makeSavedDefault, defaultKey, fmtSize, fmtMm,
 } from '@engine';
-import SendOrder from '../../components/SendOrder.jsx';
+import OrderPanel from '../../components/OrderPanel.jsx';
 import { orderStart } from '../../lib/orderRecipe.js';
 import { useRenders } from '../../hooks/useRenders.js';
 import { store } from '../../lib/storage.js';
@@ -33,7 +33,7 @@ const savedDefaultFor = (printerId, kind) => store.get('cardDefaults', {})[defau
 export default function CardsTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters, initial = null,
+  printers, printer, onPrinter, onManagePrinters, initial = null, ctx,
 }) {
   const { geometry, pdf, imageInfo } = job;
   // The kind of product in the file (used for "my default", e.g. business cards).
@@ -149,21 +149,24 @@ export default function CardsTool({
     },
   };
 
+  // The print-ready PDF and its file name (downloaded, or saved straight to an order).
+  async function buildOutput() {
+    const bleedArt = await printBleedArt(pdf, plan); // null when no bleed is made
+    const bytes = await buildCardsPdf({
+      sourceBytes: job.bytes,
+      plan,
+      bleedArt,
+      title: `${job.name} - ${layout.count}-up ${sheetName}`,
+    });
+    return { bytes, name: `${job.name}_${fmtMm(plan.out.w)}x${fmtMm(plan.out.h)}_${layout.count}up_${sheet.label}${sheet.orientation === 'landscape' ? '-L' : ''}.pdf` };
+  }
+
   async function download() {
     setDownloading(true);
     setError('');
     try {
-      const bleedArt = await printBleedArt(pdf, plan); // null when no bleed is made
-      const bytes = await buildCardsPdf({
-        sourceBytes: job.bytes,
-        plan,
-        bleedArt,
-        title: `${job.name} - ${layout.count}-up ${sheetName}`,
-      });
-      downloadBytes(
-        bytes,
-        `${job.name}_${fmtMm(plan.out.w)}x${fmtMm(plan.out.h)}_${layout.count}up_${sheet.label}${sheet.orientation === 'landscape' ? '-L' : ''}.pdf`
-      );
+      const out = await buildOutput();
+      downloadBytes(out.bytes, out.name);
     } catch (e) {
       setError(e.message || 'Could not build the PDF.');
     } finally {
@@ -229,7 +232,7 @@ export default function CardsTool({
         <section className="controls-col">
           <PrintSizeCard plan={plan} base={safeBase} onChange={update} imageInfo={imageInfo} />
 
-          <BleedCard plan={plan} base={safeBase} onChange={update} checking={!safety} />
+          {ctx.pro && <BleedCard plan={plan} base={safeBase} onChange={update} checking={!safety} />}
 
           <ShapeCard plan={plan} base={safeBase} onChange={update} fileName={job.name} />
 
@@ -261,48 +264,59 @@ export default function CardsTool({
             </div>
           )}
 
-          <SheetCard
-            base={safeBase}
-            onChange={update}
-            counts={counts}
-            customSheets={customSheets}
-            onAddCustom={addCustom}
-            onRemoveCustom={removeCustom}
-            printers={printers}
-            printer={printer}
-            onPrinter={onPrinter}
-            onManagePrinters={onManagePrinters}
-          />
+          {ctx.pro && (
+            <SheetCard
+              base={safeBase}
+              onChange={update}
+              counts={counts}
+              customSheets={customSheets}
+              onAddCustom={addCustom}
+              onRemoveCustom={removeCustom}
+              printers={printers}
+              printer={printer}
+              onPrinter={onPrinter}
+              onManagePrinters={onManagePrinters}
+            />
+          )}
 
-          <AdvancedPanel
-            settings={settings}
-            overrides={overrides}
-            setOverrides={changeOverrides}
-            onResetTips={() => {
-              tips.reset();
-              setJobDismissed([]);
-            }}
-            printerName={printer.name}
-            defaults={defaults}
-          />
+          {ctx.pro && (
+            <AdvancedPanel
+              settings={settings}
+              overrides={overrides}
+              setOverrides={changeOverrides}
+              onResetTips={() => {
+                tips.reset();
+                setJobDismissed([]);
+              }}
+              printerName={printer.name}
+              defaults={defaults}
+            />
+          )}
 
           {(error || loadError) && <p className="error">{error || loadError}</p>}
 
+          <OrderPanel
+            ctx={ctx}
+            job={job}
+            tool="cards"
+            title={product.label}
+            quantity={safeBase.copies}
+            recipe={{ v: 1, tool: 'cards', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides }}
+            summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: layout.count, sheets: plan.sheetsNeeded, pages: geometry.pageCount }}
+            spec={{
+              groups: [{ label: 'Printing', sheets: plan.sheetsNeeded, sheetW: sheet.w, sheetH: sheet.h, sides: plan.twoSided ? 2 : 1, sticker: plan.shape.cutter === 'plotter' }],
+              cut: plan.shape.cutter === 'plotter' ? 'contour' : 'guillotine',
+            }}
+            defaultPaper="card300"
+            outputs={[{ kind: 'imposed', label: 'print-ready PDF', build: buildOutput }]}
+            initial={initial}
+            disabled={!layout.count}
+          />
+
           <div className="actions">
-            <button type="button" className="primary" onClick={download} disabled={!layout.count || downloading}>
+            <button type="button" className={ctx.pro && !ctx.order ? 'primary' : 'ghost-btn wide-btn'} onClick={download} disabled={!layout.count || downloading}>
               {downloading ? 'Building PDF…' : 'Download print-ready PDF'}
             </button>
-            {!initial && (
-              <SendOrder
-                job={job}
-                tool="cards"
-                title={product.label}
-                quantity={safeBase.copies}
-                recipe={{ v: 1, tool: 'cards', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides }}
-                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: plan.sheet.label, perSheet: layout.count, sheets: plan.sheetsNeeded, pages: geometry.pageCount }}
-                disabled={!layout.count}
-              />
-            )}
             <FileDrop onFiles={onFiles} busy={busy} compact />
           </div>
         </section>

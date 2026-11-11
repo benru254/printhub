@@ -4,7 +4,7 @@ import {
   cardStartState, makeSavedDefault, defaultKey, computeArtFit, itemAt, canvasAngle, NUMBERING_DEFAULTS,
   fmtSize, fmtMm, COPY_NAME_SIZE, PART_NAMES,
 } from '@engine';
-import SendOrder from '../../components/SendOrder.jsx';
+import OrderPanel from '../../components/OrderPanel.jsx';
 import { orderStart, orderExtra } from '../../lib/orderRecipe.js';
 import { useRenders } from '../../hooks/useRenders.js';
 import { store } from '../../lib/storage.js';
@@ -46,7 +46,7 @@ const defaultsKeyFor = (printerId, kind) => defaultKey(printerId, `cutstack:${ki
 export default function CutStackTool({
   job, onBack, onFiles, busy, loadError, tips,
   customSheets, onAddCustomSheet, onRemoveCustomSheet,
-  printers, printer, onPrinter, onManagePrinters, initial = null,
+  printers, printer, onPrinter, onManagePrinters, initial = null, ctx,
 }) {
   const { geometry, pdf, imageInfo } = job;
   const original = detectProduct(geometry.pages[0].trimMm, geometry.pageCount);
@@ -217,20 +217,26 @@ export default function CutStackTool({
     },
   };
 
+  // The print-ready PDF and its file name (downloaded, or saved straight to an order).
+  async function buildOutput() {
+    const bleedArt = mode === 'number' ? await printBleedArt(pdf, plan) : null;
+    const bytes = await buildCutStackPdf({
+      sourceBytes: job.bytes,
+      plan,
+      bleedArt,
+      title: `${job.name} - cut and stack ${perSheet}-up ${sheetName}`,
+    });
+    const range = mode === 'number' ? `${numbering.start}-${numbering.start + total - 1}` : `${total}pages`;
+    if (mode === 'number') store.set('numberingNext', numbering.start + total);
+    return { bytes, name: `${job.name}_${range}_${perSheet}up_${sheet.label}${sheet.orientation === 'landscape' ? '-L' : ''}.pdf` };
+  }
+
   async function download() {
     setDownloading(true);
     setError('');
     try {
-      const bleedArt = mode === 'number' ? await printBleedArt(pdf, plan) : null;
-      const bytes = await buildCutStackPdf({
-        sourceBytes: job.bytes,
-        plan,
-        bleedArt,
-        title: `${job.name} - cut and stack ${perSheet}-up ${sheetName}`,
-      });
-      const range = mode === 'number' ? `${numbering.start}-${numbering.start + total - 1}` : `${total}pages`;
-      downloadBytes(bytes, `${job.name}_${range}_${perSheet}up_${sheet.label}${sheet.orientation === 'landscape' ? '-L' : ''}.pdf`);
-      if (mode === 'number') store.set('numberingNext', numbering.start + total);
+      const out = await buildOutput();
+      downloadBytes(out.bytes, out.name);
     } catch (e) {
       setError(e.message || 'Could not build the PDF.');
     } finally {
@@ -348,50 +354,63 @@ export default function CutStackTool({
           )}
 
           <PrintSizeCard plan={plan} base={safeBase} onChange={update} imageInfo={imageInfo} />
-          {mode === 'number' && <BleedCard plan={plan} base={safeBase} onChange={update} checking={!safety} />}
+          {ctx.pro && mode === 'number' && <BleedCard plan={plan} base={safeBase} onChange={update} checking={!safety} />}
 
-          <SheetCard
-            base={safeBase}
-            onChange={update}
-            counts={counts}
-            customSheets={customSheets}
-            onAddCustom={addCustom}
-            onRemoveCustom={removeCustom}
-            printers={printers}
-            printer={printer}
-            onPrinter={onPrinter}
-            onManagePrinters={onManagePrinters}
-          />
+          {ctx.pro && (
+            <SheetCard
+              base={safeBase}
+              onChange={update}
+              counts={counts}
+              customSheets={customSheets}
+              onAddCustom={addCustom}
+              onRemoveCustom={removeCustom}
+              printers={printers}
+              printer={printer}
+              onPrinter={onPrinter}
+              onManagePrinters={onManagePrinters}
+            />
+          )}
 
-          <AdvancedPanel
-            settings={settings}
-            overrides={overrides}
-            setOverrides={changeOverrides}
-            onResetTips={() => {
-              tips.reset();
-              setJobDismissed([]);
-            }}
-            printerName={printer.name}
-            defaults={defaults}
-          />
+          {ctx.pro && (
+            <AdvancedPanel
+              settings={settings}
+              overrides={overrides}
+              setOverrides={changeOverrides}
+              onResetTips={() => {
+                tips.reset();
+                setJobDismissed([]);
+              }}
+              printerName={printer.name}
+              defaults={defaults}
+            />
+          )}
 
           {(error || loadError) && <p className="error">{error || loadError}</p>}
 
+          <OrderPanel
+            ctx={ctx}
+            job={job}
+            tool="cutstack"
+            title={mode === 'number' ? `Numbered ${original.label.toLowerCase()}` : original.label}
+            quantity={total}
+            recipe={{ v: 1, tool: 'cutstack', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { mode, numbering } }}
+            summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: sheet.label, perSheet, sheets, pages: geometry.pageCount }}
+            spec={{
+              groups: [{ label: 'Printing', sheets: sheets * (plan.parts || 1), sheetW: sheet.w, sheetH: sheet.h, sides: plan.twoSided ? 2 : 1 }],
+              cut: 'guillotine',
+              books: plan.books ? plan.books.count : 0,
+              binding: plan.books ? 'pad' : null,
+            }}
+            defaultPaper={(plan.parts || 1) > 1 ? 'ncr' : 'bond80'}
+            outputs={[{ kind: 'imposed', label: 'print-ready PDF', build: buildOutput }]}
+            initial={initial}
+            disabled={!perSheet}
+          />
+
           <div className="actions">
-            <button type="button" className="primary" onClick={download} disabled={!perSheet || downloading}>
+            <button type="button" className={ctx.pro && !ctx.order ? 'primary' : 'ghost-btn wide-btn'} onClick={download} disabled={!perSheet || downloading}>
               {downloading ? `Building PDF (${plan.pages} pages)…` : `Download print-ready PDF (${plan.pages} pages)`}
             </button>
-            {!initial && (
-              <SendOrder
-                job={job}
-                tool="cutstack"
-                title={mode === 'number' ? `Numbered ${original.label.toLowerCase()}` : original.label}
-                quantity={total}
-                recipe={{ v: 1, tool: 'cutstack', printer: { id: printer.id, name: printer.name }, base: safeBase, overrides, extra: { mode, numbering } }}
-                summary={{ size: fmtSize(plan.out.w, plan.out.h), sheet: sheet.label, perSheet, sheets, pages: geometry.pageCount }}
-                disabled={!perSheet}
-              />
-            )}
             <FileDrop onFiles={onFiles} busy={busy} compact />
           </div>
         </section>
