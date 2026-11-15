@@ -162,7 +162,9 @@ export async function decideClaim(staffId, orderId, claimId, { action, amount, n
     const value = Number(amount) > 0 ? Number(amount) : claim.amount_cents != null ? fromCents(claim.amount_cents) : null;
     if (!value) throw badRequest('Enter the amount that came in.');
     // The payment goes through the normal door, so every rule (no code twice) still holds.
-    await addMoney(staffId, orderId, { kind: 'payment', amount: value, method: claim.method, reference: claim.reference, note: 'Confirmed from the customer’s message' });
+    // (If it is already there, a first try stopped half way: just finish marking the message.)
+    const already = await get(`SELECT 1 FROM order_ledger WHERE order_id = $1 AND kind = 'payment' AND upper(reference) = $2`, [orderId, claim.reference.toUpperCase()]);
+    if (!already) await addMoney(staffId, orderId, { kind: 'payment', amount: value, method: claim.method, reference: claim.reference, note: 'Confirmed from the customer’s message' });
   }
   await transaction(async (tx) => {
     await tx.run(

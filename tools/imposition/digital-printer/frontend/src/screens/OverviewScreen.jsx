@@ -11,7 +11,7 @@ import { store } from '../lib/storage.js';
 const MAX_THUMBS = 24;
 
 // Screen 2: see your file, its facts, and choose what to make.
-export default function OverviewScreen({ job, onOpenTool, onFiles, busy, error, customSheets, printer }) {
+export default function OverviewScreen({ job, onOpenTool, onFiles, busy, error, customSheets, printer, pro }) {
   const { geometry, pdf } = job;
   const [viewing, setViewing] = useState(null);
   const first = geometry.pages[0];
@@ -52,7 +52,7 @@ export default function OverviewScreen({ job, onOpenTool, onFiles, busy, error, 
         <div className="card">
           <h2 className="section-title">What do you want to make?</h2>
           <div className="tools">
-            {TOOLS.map((t) => {
+            {TOOLS.filter((t) => pro || !t.pro).map((t) => {
               const ready = t.status === 'ready';
               const recommended = t.id === product.recommended;
               let line = t.desc;

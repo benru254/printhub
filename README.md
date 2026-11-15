@@ -7,15 +7,22 @@ customers, full control for trained print operators.
 
 | Tool | Folder | Status |
 |---|---|---|
-| Imposition · Digital printer (cards, stickers & contour cut lines, numbered books, booklets, glued books, resize, make bleed) | `tools/imposition/digital-printer/` | Working (Parts 1–9) |
-| Orders server (orders, staff, shop settings, price list, money ledger) | `server/` | Working (Parts 8–9), see [server/README.md](server/README.md) |
-| Canvas editor, t-shirt printing, large format… | `tools/…` | Planned |
+| Shop front: products with prices, ordering, proof approval, "I have paid", order again | `tools/imposition/digital-printer/frontend/src/products/`, `screens/` | Working (Part 10) |
+| Imposition · Digital printer (cards, stickers & contour cut lines, numbered books, booklets, glued books, make bleed) | `tools/imposition/digital-printer/` | Working (Parts 1–10) |
+| Large format (banners, roll-ups, vinyl, posters: hems, eyelets, parts, tiles) | `tools/imposition/digital-printer/engine/tools/largeformat/` | Working (Part 10) |
+| Offset (price route, press sheets, work and turn, colour bar) | `engine/core/productPrice.js`, cards tool | Working (Part 10) |
+| Orders server (orders, staff, products, prices, money ledger, production board) | `server/` | Working (Parts 8–10), see [server/README.md](server/README.md) |
+| Canvas editor, editable templates, t-shirt printing… | `tools/…` | Planned |
 
 Each tool is its own small app with a clear `engine/` (maths + PDF, no screen code),
 `frontend/` (screens) and `backend/` (tool-specific server code, later). Orders, tracking and
 staff are shared by every tool, so they live in one server: `server/` (Express + PostgreSQL).
 
-## Set up the imposition tool (Windows PowerShell)
+## Run everything on your computer and phone
+
+Double-click `start-printhub.bat`. Full steps and the test checklist: [LOCAL-TEST.md](LOCAL-TEST.md).
+
+## Work on the app's code (Windows PowerShell)
 
 Clone the repository once, then install and run the tool:
 

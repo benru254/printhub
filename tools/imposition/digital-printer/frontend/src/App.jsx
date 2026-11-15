@@ -1,11 +1,12 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { readPdfGeometry } from '@engine';
+import { readPdfGeometry, findProduct } from '@engine';
 import { loadFiles } from './lib/loadFiles.js';
 import { openPdf } from './lib/pdfRender.js';
 import { store } from './lib/storage.js';
 import { loadPrinters, savePrinters } from './lib/printers.js';
 import Header from './components/Header.jsx';
 import StartScreen from './screens/StartScreen.jsx';
+import ShopHome from './screens/ShopHome.jsx';
 import OverviewScreen from './screens/OverviewScreen.jsx';
 import ErrorBoundary from './components/ErrorBoundary.jsx';
 import { useShop } from './lib/shop.js';
@@ -19,21 +20,29 @@ const TOOLS = {
   cutstack: lazy(() => import('./tools/cutstack/CutStackTool.jsx')),
   booklet: lazy(() => import('./tools/booklet/BookletTool.jsx')),
   perfectbound: lazy(() => import('./tools/perfectbound/PerfectBoundTool.jsx')),
+  largeformat: lazy(() => import('./tools/largeformat/LargeFormatTool.jsx')),
 };
+const ProductWizard = lazy(() => import('./products/ProductWizard.jsx'));
+const MyOrders = lazy(() => import('./screens/MyOrders.jsx'));
 const PrintersPanel = lazy(() => import('./printers/PrintersPanel.jsx'));
 const TrackScreen = lazy(() => import('./screens/TrackScreen.jsx'));
 const StaffApp = lazy(() => import('./staff/StaffApp.jsx'));
 
-// #/track/PH-XXXXXX = customer tracking, #/staff... = operator side, anything else = the tool.
+// #/track/PH-XXXXXX?k=key = a customer's order, #/orders = all their orders,
+// #/staff... = the shop's side, anything else = the shop front and the tools.
 function readRoute() {
-  const h = window.location.hash.replace(/^#\/?/, '');
-  if (h === 'track' || h.startsWith('track/')) return { name: 'track', code: decodeURIComponent(h.slice(6)) };
+  const [h, query = ''] = window.location.hash.replace(/^#\/?/, '').split('?');
+  if (h === 'track' || h.startsWith('track/')) {
+    return { name: 'track', code: decodeURIComponent(h.slice(6)), key: new URLSearchParams(query).get('k') || '' };
+  }
+  if (h === 'orders') return { name: 'orders' };
   if (h === 'staff' || h.startsWith('staff/')) return { name: 'staff', path: h.slice(6) };
   return { name: 'main' };
 }
 
-// Screens: start (choose file) -> overview (your file + choose a tool) -> tool
-// The printers panel opens on top of any screen.
+// Screens: start (the shop front: products) -> product (order one)
+//          or: file (print my own file) -> overview (your file + choose a tool) -> tool
+// For a 'product' screen, `tool` holds the product's id. The printers panel opens on top of any screen.
 export default function App() {
   const [job, setJob] = useState(null);
   const [screen, setScreen] = useState('start');
@@ -46,7 +55,7 @@ export default function App() {
   const [activeId, setActiveId] = useState(() => store.get('activePrinter', null));
   const [printersOpen, setPrintersOpen] = useState(false);
   const [route, setRoute] = useState(readRoute);
-  const [fromOrder, setFromOrder] = useState(null); // { id, code, customerName, quantity, recipe } when opened from an order
+  const [fromOrder, setFromOrder] = useState(null); // the order a file was opened from: { id, code, customerName, customerPhone, trackKey, title, quantity, recipe, summary }
   const [pro, setPro] = useState(startsPro); // Simple (customers) or Pro (the shop): see lib/mode.js
   const [resume, setResume] = useState(null); // the file from last time, if the phone kept it
   const shop = useShop();
@@ -130,7 +139,10 @@ export default function App() {
     const recipe = order.recipe && order.recipe.tool ? order.recipe : { tool: order.tool };
     // A customer's file is not kept as "your last file" on the shop computer.
     if (!(await handleFiles([file], { keep: false, then: 'tool', thenTool: recipe.tool }))) return;
-    setFromOrder({ id: order.id, code: order.code, customerName: order.customerName, quantity: order.quantity, recipe });
+    setFromOrder({
+      id: order.id, code: order.code, customerName: order.customerName, customerPhone: order.customerPhone, trackKey: order.trackKey,
+      title: order.title, quantity: order.quantity, summary: order.summary || {}, recipe,
+    });
   }
 
   const tips = {
@@ -178,12 +190,17 @@ export default function App() {
     );
   }
 
+  const product = screen === 'product' ? findProduct(shop.catalogue, tool) : null;
   let body;
   if (route.name === 'track') {
-    body = <TrackScreen key={route.code} code={route.code} />;
+    body = <TrackScreen key={`${route.code}-${route.key}`} code={route.code} linkKey={route.key} shop={shop} />;
+  } else if (route.name === 'orders') {
+    body = <MyOrders shop={shop} />;
   } else if (route.name === 'staff') {
-    body = <StaffApp path={route.path} onOpenInTool={openOrder} />;
-  } else if (!job || screen === 'start') {
+    body = <StaffApp path={route.path} onOpenInTool={openOrder} shop={shop} />;
+  } else if (product && product.active !== false) {
+    body = <ProductWizard key={product.id} product={product} shop={shop} onBack={() => window.history.back()} onHome={() => go('start')} />;
+  } else if (screen === 'file' || ((screen === 'overview' || screen === 'tool') && !job)) {
     body = (
       <StartScreen
         onFiles={handleFiles}
@@ -193,6 +210,7 @@ export default function App() {
         resume={resume}
         onResume={() => handleFiles({ saved: resume })}
         onForget={() => clearLastJob().then(() => setResume(null))}
+        onBack={() => go('start')}
       />
     );
   } else if (screen === 'tool' && TOOLS[tool]) {
@@ -217,7 +235,7 @@ export default function App() {
         onManagePrinters={() => setPrintersOpen('edit')}
       />
     );
-  } else {
+  } else if (screen === 'overview' && job) {
     body = (
       <OverviewScreen
         job={job}
@@ -227,14 +245,18 @@ export default function App() {
         error={error}
         customSheets={shownSheets}
         printer={printer}
+        pro={pro}
       />
     );
+  } else {
+    body = <ShopHome shop={shop} onProduct={(id) => go('product', id)} onOwnFile={() => go('file')} />;
   }
 
   return (
     <div className="app">
-      <Header printer={pro ? printer : null} onPrinters={() => setPrintersOpen('list')} pro={pro} onTogglePro={togglePro} shopName={shop.shop.name} />
-      {fromOrder && route.name === 'main' && job && (
+      <Header printer={pro ? printer : null} onPrinters={() => setPrintersOpen('list')} pro={pro} onTogglePro={togglePro} shopName={shop.shop.name} onHome={() => go('start')}
+        showMode={route.name === 'staff' || (route.name === 'main' && ['file', 'overview', 'tool'].includes(screen))} />
+      {fromOrder && route.name === 'main' && job && (screen === 'tool' || screen === 'overview') && (
         <div className="order-banner">
           <span>
             Order <strong>{fromOrder.code}</strong> · {fromOrder.customerName} · {fromOrder.quantity} — customer’s settings loaded

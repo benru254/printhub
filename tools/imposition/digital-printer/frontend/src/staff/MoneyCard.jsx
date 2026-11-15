@@ -22,6 +22,12 @@ export default function MoneyCard({ order, onChange }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [showLines, setShowLines] = useState(false);
+  const [claimAmount, setClaimAmount] = useState({});
+  const pending = (order.claimList || []).filter((c) => c.status === 'pending');
+  const lines = order.quote ? [...(order.quote.lines || []), ...(order.quote.extras || [])] : [];
+
+  const decide = (c, action) =>
+    act(`claim-${c.id}`, () => api(`/orders/${order.id}/claims/${c.id}`, { method: 'POST', auth: true, json: { action, amount: Number(claimAmount[c.id] ?? c.amount) || undefined } }));
 
   async function act(label, fn) {
     setBusy(label);
@@ -50,6 +56,19 @@ export default function MoneyCard({ order, onChange }) {
   return (
     <div className="card">
       <div className="field-label">Money</div>
+      {pending.map((c) => (
+        <div key={c.id} className="claim">
+          <p>
+            <strong>{order.customerName} says they paid</strong> by M-Pesa, code <strong>{c.reference}</strong>
+            {c.amount ? <> · {formatMoney(c.amount, cur)}</> : null}. Check your M-Pesa messages for this code.
+          </p>
+          <div className="money-inputs">
+            <input className="num" type="number" inputMode="decimal" min="1" step="any" aria-label="Amount that came in" placeholder="Amount that came in" value={claimAmount[c.id] ?? c.amount ?? ''} onChange={(e) => setClaimAmount({ ...claimAmount, [c.id]: e.target.value })} />
+            <button type="button" className="primary slim" disabled={!!busy || !(Number(claimAmount[c.id] ?? c.amount) > 0)} onClick={() => decide(c, 'confirm')}>{busy === `claim-${c.id}` ? 'Saving…' : 'It came in'}</button>
+            <button type="button" className="ghost-btn" disabled={!!busy} onClick={() => decide(c, 'reject')}>Not received</button>
+          </div>
+        </div>
+      ))}
       <div className="money-row">
         <div><span className="hint">Price</span><strong>{formatMoney(m.total, cur)}</strong></div>
         <div><span className="hint">Paid</span><strong>{formatMoney(m.paid, cur)}</strong></div>
@@ -59,15 +78,17 @@ export default function MoneyCard({ order, onChange }) {
         </div>
       </div>
 
-      {order.quote && order.quote.lines && (
+      {m.depositDue > 0 && <p className="hint">Deposit before printing: {formatMoney(m.depositDue, cur)} still to come.</p>}
+
+      {lines.length > 0 && (
         <>
           <button type="button" className="link-btn" onClick={() => setShowLines(!showLines)}>
             {showLines ? 'Hide' : 'Show'} how the estimate ({formatMoney(order.quote.total, cur)}) adds up
           </button>
           {showLines && (
             <ul className="price-lines">
-              {order.quote.lines.map((l, i) => (
-                <li key={i}><span>{l.label}<small> · {l.detail}</small></span><span>{formatMoney(l.amount, cur)}</span></li>
+              {lines.map((l, i) => (
+                <li key={i}><span>{l.label}{l.detail ? <small> · {l.detail}</small> : null}</span><span>{formatMoney(l.amount, cur)}</span></li>
               ))}
               {order.quote.discount > 0 && <li className="price-less"><span>Quantity discount {order.quote.discountPct}%</span><span>−{formatMoney(order.quote.discount, cur)}</span></li>}
             </ul>

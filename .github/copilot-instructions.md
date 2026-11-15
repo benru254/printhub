@@ -47,3 +47,13 @@ and pushes them on branches. Copilot does the file and terminal work on Reuben's
 - Every tool shows `<OrderPanel>` (paper, finish, price, send / save to order). A new tool must pass it a `spec` (sheets, sides, cut, binding) and `outputs`.
 - Screens change with `go(screen, tool)` in `App.jsx` so the phone's Back button works. Do not call `setScreen` directly.
 - `frontend/sw.template.js` + the `offlineApp` plugin in `vite.config.js` make the offline app. `/api` must never be cached.
+
+## Added in Part 10 (keep these rules)
+- To run everything: `start-printhub.bat` in the repository root (installs, builds, starts). With no `server/.env` the server uses its built-in database (PGlite) in `server/data`. Do not install PostgreSQL unless Reuben asks. See `LOCAL-TEST.md`.
+- Products: the catalogue is ONE module, `engine/core/catalogue.js`, and product prices are ONE module, `engine/core/productPrice.js`. The phone only sends WHICH product and WHAT was chosen; the server works out price, tool, settings and ready date (`server/src/modules/orders/orders.service.js`, `fromProduct`). Never trust a price, title or quantity sent with a product order.
+- A choice always goes through `cleanChoice(product, raw)` before it is priced or saved.
+- Customers have no password. `track_key` (in the tracking link) or phone number opens one order; the customer token opens "my orders". `requireStaff` must keep refusing customer tokens.
+- A proof sets `orders.proof_state`. Printing while it is `sent`, and handing over an unpaid order, are refused with 409 `{ needs }` until staff confirm on purpose (`useOrderMove.jsx`). Do not remove these checks.
+- "I have paid" is a row in `payment_claims`, NOT money. Only confirming it adds a ledger payment (through `addMoney`, so a code is never used twice).
+- Papers for printing (job ticket, receipt) are drawn into `#print-root` with `<PrintSheet>` (`frontend/src/lib/print.jsx`).
+- Every SQL statement must work on PostgreSQL AND the built-in database: `npm test` in `server/` runs on the built-in one; CI also runs it on PostgreSQL.

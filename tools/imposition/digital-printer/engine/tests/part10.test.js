@@ -122,6 +122,7 @@ test('price table: the shop pins a price; other options add what they cost', () 
   assert.equal(priceProduct(cards, { quantity: 100, sides: 1 }, ctx).total, 350);
   assert.equal(tablePrice([{ qty: 100, price: 500 }], 20), 500); // below the list: the smallest price
   assert.equal(tablePrice([], 20), null);
+  assert.equal(priceProduct({ ...cards, priceTable: [{ qty: '100', price: '500' }] }, { quantity: 100 }, ctx).total, 500); // typed as text
 });
 
 test('offset: big runs go to the press when that is cheaper, and take longer', () => {

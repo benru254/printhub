@@ -9,9 +9,11 @@ export const staffToken = {
   clear: () => store.set(TOKEN_KEY, null),
 };
 
-export async function api(path, { method = 'GET', json, form, auth = false } = {}) {
+// auth: true = send the staff login.  customer: true = send the customer's own token (my orders).
+export async function api(path, { method = 'GET', json, form, auth = false, customer = false } = {}) {
   const headers = {};
   if (auth && staffToken.get()) headers.authorization = `Bearer ${staffToken.get()}`;
+  else if (customer && store.get('customerToken', null)) headers.authorization = `Bearer ${store.get('customerToken', null)}`;
   let body;
   if (json !== undefined) {
     headers['content-type'] = 'application/json';
@@ -30,6 +32,7 @@ export async function api(path, { method = 'GET', json, form, auth = false } = {
     const data = type.includes('json') ? await res.json().catch(() => ({})) : {};
     const err = new Error(data.error || (res.status === 404 ? 'The shop server is not running yet.' : `Server error (${res.status}).`));
     err.status = res.status;
+    err.data = data; // e.g. { needs: 'allowOwing' } when the server wants a yes first
     if (res.status === 401 && auth) staffToken.clear();
     throw err;
   }
@@ -42,12 +45,14 @@ export const ORDER_TOOLS = {
   cutstack: 'Numbered books & tickets',
   booklet: 'Booklet',
   perfectbound: 'Book (glued spine)',
+  largeformat: 'Banners & large prints',
 };
 
 export const STATUS_LABELS = {
   new: 'New',
   checking: 'Checking',
   needs_customer: 'Needs customer',
+  proof: 'Proof sent',
   approved: 'Approved',
   printing: 'Printing',
   ready: 'Ready',

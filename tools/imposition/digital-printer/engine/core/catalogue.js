@@ -191,9 +191,10 @@ export function cleanChoice(product, raw = {}) {
   const c = { quantity: whole(r.quantity, 1, 1000000, (product.quantities && product.quantities[0]) || 1) };
 
   // Size: one from the list, or the customer's own when the product allows it.
-  const listed = sizes.find((s) => s.id === r.size);
   const w = Number(r.w);
   const h = Number(r.h);
+  // By its id; or, when the shop renamed its sizes since (an order being repeated), by its measurements.
+  const listed = sizes.find((s) => s.id === r.size) || (r.size !== 'custom' ? sizes.find((s) => s.w === w && s.h === h) : null);
   const ownOk = product.customSize && w >= limits.min && w <= limits.max && h >= limits.min && h <= limits.max;
   if (r.size === 'custom' && ownOk) Object.assign(c, { size: 'custom', w: Math.round(w), h: Math.round(h) });
   else {

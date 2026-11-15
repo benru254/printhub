@@ -181,7 +181,8 @@ function areaQuote(product, c, priceList) {
 // The shop's fixed price for a quantity: exact when listed, a straight line between two
 // listed quantities, the smallest price below the list, the last "each" price above it.
 export function tablePrice(table, quantity) {
-  const rows = (table || []).filter((r) => r.qty > 0 && r.price > 0).sort((a, b) => a.qty - b.qty);
+  // Numbers even while the shop owner is still typing them (the editor holds text).
+  const rows = (table || []).map((r) => ({ qty: Number(r.qty), price: Number(r.price) })).filter((r) => r.qty > 0 && r.price > 0).sort((a, b) => a.qty - b.qty);
   if (!rows.length) return null;
   const exact = rows.find((r) => r.qty === quantity);
   if (exact) return exact.price;

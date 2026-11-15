@@ -224,6 +224,7 @@ async function trackView(order, db = { all, get }) {
     title: order.title,
     tool: order.tool,
     productId: order.product_id,
+    choice: (order.recipe && order.recipe.product && order.recipe.product.choice) || null,
     quantity: order.quantity,
     detail: (order.summary && order.summary.detail) || '',
     status: order.status,
@@ -274,6 +275,7 @@ export async function answerProof(code, access, { action, message }) {
   const id = await transaction(async (tx) => {
     const found = await findTracked(tx, code, access);
     const o = await tx.get('SELECT * FROM orders WHERE id = $1 FOR UPDATE', [found.id]);
+    if (['collected', 'cancelled'].includes(o.status)) throw badRequest('This order is closed. Please contact the shop.');
     if (o.proof_state !== 'sent') throw badRequest(o.proof_state === 'approved' ? 'You have already approved this proof.' : 'There is no proof waiting for you.');
     const approved = action === 'approve';
     const status = approved ? 'approved' : 'checking';
@@ -390,6 +392,7 @@ export async function customerOrders(customerId) {
   const rows = await all(
     `SELECT o.code, o.track_key AS "key", o.title, o.quantity, o.status, o.created_at AS "createdAt", o.due_at AS "dueAt",
             o.product_id AS "productId", o.proof_state AS "proofState", o.summary->>'detail' AS detail,
+            o.artwork, o.recipe->'product'->'choice' AS choice,
             (SELECT coalesce(sum(amount_cents), 0) FROM order_ledger l WHERE l.order_id = o.id AND l.kind = 'charge')::float8 / 100 AS "total",
             (SELECT coalesce(sum(CASE kind WHEN 'payment' THEN amount_cents WHEN 'refund' THEN -amount_cents ELSE 0 END), 0)
                FROM order_ledger l WHERE l.order_id = o.id)::float8 / 100 AS "paid"
@@ -410,7 +413,7 @@ export async function customerLogin({ phone, code }) {
 const LIST_SQL = `
   SELECT o.id, o.code, o.tool, o.title, o.quantity, o.status, o.created_at AS "createdAt", o.updated_at AS "updatedAt",
          o.summary, o.quote, o.due_at AS "dueAt", o.source, o.artwork, o.delivery, o.address,
-         o.product_id AS "productId", o.proof_state AS "proofState", o.reorder_of AS "reorderOf",
+         o.product_id AS "productId", o.proof_state AS "proofState", o.reorder_of AS "reorderOf", o.track_key AS "trackKey",
          cu.id AS "customerId", cu.name AS "customerName", cu.phone AS "customerPhone",
          s.id AS "assignedId", s.name AS "assignedName",
          (SELECT coalesce(sum(amount_cents), 0) FROM order_ledger l WHERE l.order_id = o.id AND l.kind = 'charge')::float8 / 100 AS "total",

@@ -8,10 +8,11 @@ function ago(ms) {
   return `${Math.round(min / 1440)} days ago`;
 }
 
-export default function StartScreen({ onFiles, busy, error, shop, resume, onResume, onForget }) {
+export default function StartScreen({ onFiles, busy, error, shop, resume, onResume, onForget, onBack }) {
   return (
     <main className="start">
-      <h1 className="start-title">Get your design ready for printing</h1>
+      <button type="button" className="back-btn" onClick={onBack}>‹ All products</button>
+      <h1 className="start-title">Print my own file</h1>
       <p className="start-sub">
         Choose your file. We show you what it is, how big it is, what it costs, and turn it into a print-ready sheet.
       </p>

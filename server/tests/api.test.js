@@ -452,6 +452,24 @@ test('proof approved by phone: staff can say so, and it is written down', async 
   assert.ok(t.events.some((e) => e.kind === 'proof' && e.message === 'Approved by phone or WhatsApp'));
 });
 
+test('a proof on a cancelled order cannot bring the order back', async () => {
+  const r = await call('POST', '/orders', { form: productForm(CARDS, { phone: '0722 555 999', name: 'Changed Mind' }) });
+  const id = (await call('GET', '/orders?q=Changed', { token: admin })).body.orders[0].id;
+  const f = new FormData();
+  f.append('kind', 'proof');
+  f.append('file', new Blob([PNG]), 'p.png');
+  await call('POST', `/orders/${id}/files`, { token: admin, form: f });
+  await call('PATCH', `/orders/${id}`, { token: admin, json: { status: 'cancelled' } });
+  const late = await call('POST', `/orders/track/${r.body.code}/proof`, { json: { key: r.body.key, action: 'approve' } });
+  assert.equal(late.status, 400);
+  assert.equal((await call('GET', `/orders/${id}`, { token: admin })).body.order.status, 'cancelled');
+  // A closed order takes no new proof either.
+  const again = new FormData();
+  again.append('kind', 'proof');
+  again.append('file', new Blob([PNG]), 'p2.png');
+  assert.equal((await call('POST', `/orders/${id}/files`, { token: admin, form: again })).status, 400);
+});
+
 test('"I have paid": the customer pastes the M-Pesa message, staff confirm it', async () => {
   const sms = 'UKB7XY12QP Confirmed. Ksh310.00 sent to DISPATCH PRINT for account on 15/11/26 at 10:02 AM.';
   const none = await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: 'I paid yesterday' } });

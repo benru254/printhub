@@ -1,33 +1,28 @@
 import { useEffect, useState } from 'react';
 import { formatMoney } from '@engine';
 import { api, STATUS_LABELS, ORDER_TOOLS, formatWhen } from '../lib/api.js';
-
-// "Due today", "Due tomorrow", "2 days late"
-function dueText(iso) {
-  if (!iso) return null;
-  const days = Math.round((new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000);
-  if (days < 0) return { text: `${-days} ${days === -1 ? 'day' : 'days'} late`, late: true };
-  return { text: days === 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due in ${days} days`, late: false };
-}
+import { dueText } from '../lib/days.js';
+import { orderBadges } from './orderBadges.js';
 
 const FILTERS = [
   { value: 'open', label: 'Open' },
   { value: 'new', label: 'New' },
   { value: 'needs_customer', label: 'Needs customer' },
+  { value: 'proof', label: 'Proof sent' },
   { value: 'approved', label: 'Approved' },
   { value: 'printing', label: 'Printing' },
   { value: 'ready', label: 'Ready' },
+  { value: 'collected', label: 'Collected' },
   { value: 'all', label: 'All' },
 ];
 
-// All orders, newest first, with a status filter and a search box.
+// Every order, with a status filter and a search box (the board shows only open ones).
 export default function OrderList({ onOpen }) {
   const [status, setStatus] = useState('open');
   const [q, setQ] = useState('');
   const [data, setData] = useState({ orders: [], counts: {} });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [till, setTill] = useState(null);
 
   useEffect(() => {
     let alive = true;
@@ -37,7 +32,6 @@ export default function OrderList({ onOpen }) {
           if (!alive) return;
           setData(r);
           setError('');
-          api('/money/summary', { auth: true }).then((m) => alive && setTill(m.summary)).catch(() => {});
         })
         .catch((e) => alive && setError(e.message))
         .finally(() => alive && setLoading(false));
@@ -54,16 +48,6 @@ export default function OrderList({ onOpen }) {
 
   return (
     <div className="staff-list">
-      {till && (
-        <div className="card money-row till">
-          <div><span className="hint">Received today</span><strong>{formatMoney(till.net)}</strong></div>
-          {['mpesa', 'cash'].map((m) => {
-            const row = till.byMethod.find((b) => b.kind === 'payment' && b.method === m);
-            return <div key={m}><span className="hint">{m === 'mpesa' ? 'M-Pesa' : 'Cash'}</span><strong>{formatMoney(row ? row.amount : 0)}</strong></div>;
-          })}
-          <div className={till.owedByCustomers > 0 ? 'money-owed' : 'money-clear'}><span className="hint">Customers owe</span><strong>{formatMoney(till.owedByCustomers)}</strong></div>
-        </div>
-      )}
       <input className="num wide-select" type="search" placeholder="Search code, name, phone or title" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="chips filter-chips">
         {FILTERS.map((f) => {
@@ -90,6 +74,9 @@ export default function OrderList({ onOpen }) {
                 {o.customerName} · {o.customerPhone} · {formatWhen(o.createdAt)}
                 {o.assignedName ? ` · ${o.assignedName}` : ''}
               </span>
+              {orderBadges(o).length > 0 && (
+                <span className="job-badges">{orderBadges(o).map((b) => <span key={b.text} className={`job-badge job-badge-${b.tone}`}>{b.text}</span>)}</span>
+              )}
               <span className="order-row-sub order-row-money">
                 {o.total > 0 && (
                   <span className={o.total - o.paid > 0 ? 'money-owed' : 'money-clear'}>

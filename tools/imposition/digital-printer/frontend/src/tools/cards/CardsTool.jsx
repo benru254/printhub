@@ -188,7 +188,7 @@ export default function CardsTool({
               {layout.count > 0 ? (
                 <>
                   {product.label}: <strong>{layout.count} per {sheetName} sheet</strong>
-                  {twoSided ? ', front and back' : ''}
+                  {plan.workAndTurn ? ', work and turn' : twoSided ? ', front and back' : ''}
                 </>
               ) : (
                 <>Doesn’t fit on {sheetName}</>
@@ -209,7 +209,7 @@ export default function CardsTool({
             <FinishedPreview plan={plan} renders={renders} copies={settings.copies} unit={product.unit} safety={safety} />
           ) : (
             <>
-              {twoSided && (
+              {twoSided && !plan.workAndTurn && (
                 <Segmented
                   options={[
                     { value: 0, label: 'Front' },
@@ -220,8 +220,9 @@ export default function CardsTool({
                   label="Side"
                 />
               )}
-              <SheetPreview plan={plan} renders={renders} side={side} bleedArt={bleedPreview} />
+              <SheetPreview plan={plan} renders={renders} side={plan.workAndTurn ? 0 : side} bleedArt={bleedPreview} />
               <div className="legend">
+                {plan.workAndTurn && <span><i className="lg lg-join" /> turn the sheet over on this line</span>}
                 <span><i className="lg lg-cut" /> cut line</span>
                 <span><i className="lg lg-margin" /> printer can’t print outside</span>
               </div>
@@ -291,6 +292,31 @@ export default function CardsTool({
               printerName={printer.name}
               defaults={defaults}
             />
+          )}
+
+          {ctx.pro && (
+            <details className="card" open={safeBase.pressMarks || safeBase.workAndTurn}>
+              <summary className="field-label">Offset press</summary>
+              <label className="switch-row">
+                <span className="adv-label">
+                  <span>Colour bar and registration marks</span>
+                  <span className="hint">A strip along the top of the sheet for the press operator. The pieces start 8 mm lower.</span>
+                </span>
+                <input type="checkbox" className="switch" checked={!!safeBase.pressMarks} onChange={(e) => update({ pressMarks: e.target.checked })} />
+              </label>
+              <label className="switch-row">
+                <span className="adv-label">
+                  <span>Work and turn</span>
+                  <span className="hint">
+                    {twoSided
+                      ? 'Fronts and backs side by side on one set of plates: print, turn the pile over left to right, print again, cut in half. Half the plates.'
+                      : 'For front-and-back jobs. This file has one side.'}
+                  </span>
+                </span>
+                <input type="checkbox" className="switch" disabled={!twoSided} checked={!!safeBase.workAndTurn && twoSided} onChange={(e) => update({ workAndTurn: e.target.checked })} />
+              </label>
+              <p className="hint">Choose your press under the printer button (top right): add a printer from the “Offset press” starting point, with its sheet and gripper.</p>
+            </details>
           )}
 
           {(error || loadError) && <p className="error">{error || loadError}</p>}

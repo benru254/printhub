@@ -56,7 +56,10 @@ export default function SheetPreview({ plan, renders, side, bleedArt, pieceAt, d
       ? { halfW: plan.out.w / 2 + layout.effBleed, halfH: plan.out.h / 2 + layout.effBleed }
       : pieceDrawing(fit, layout.effBleed, page);
     const src = !made && render ? render.rectToPx(d.srcBoxPt) : null;
+    // Work and turn: fronts on the left half only; their backs are drawn on the right half below.
+    const turn = !!plan.workAndTurn;
     layout.slots.forEach((slot, index) => {
+      if (turn && index % layout.cols >= layout.cols / 2) return;
       // A spot can show its own page (Cut & Stack pages mode), or be empty.
       let pd = d;
       let pSrc = src;
@@ -116,6 +119,62 @@ export default function SheetPreview({ plan, renders, side, bleedArt, pieceAt, d
         ctx.restore();
       }
     });
+
+    if (turn) {
+      const bMade = bleedArt && bleedArt[1];
+      const bd = bMade ? d : pieceDrawing(fits[1], layout.effBleed, sides[1]);
+      const bSrc = !bMade && renders[1] ? renders[1].rectToPx(bd.srcBoxPt) : null;
+      layout.slots.forEach((slot, index) => {
+        if (index % layout.cols >= layout.cols / 2) return;
+        const p = placeOnSheet(slot, bd, true, sheetW, sheetH, 'book');
+        ctx.save();
+        ctx.translate(p.cx * k, p.cy * k);
+        ctx.rotate(canvasAngle(p.rot));
+        if (bMade) ctx.drawImage(bMade, -bd.halfW * k, -bd.halfH * k, 2 * bd.halfW * k, 2 * bd.halfH * k);
+        else if (bSrc) ctx.drawImage(renders[1].canvas, bSrc.x, bSrc.y, bSrc.w, bSrc.h, -bd.halfW * k, -bd.halfH * k, 2 * bd.halfW * k, 2 * bd.halfH * k);
+        else {
+          ctx.fillStyle = '#f3e3c8';
+          ctx.fillRect(-bd.halfW * k, -bd.halfH * k, 2 * bd.halfW * k, 2 * bd.halfH * k);
+        }
+        ctx.restore();
+        ctx.save();
+        ctx.setLineDash([3 * dpr, 2 * dpr]);
+        ctx.strokeStyle = 'rgba(0, 170, 230, 0.9)';
+        ctx.lineWidth = dpr;
+        ctx.strokeRect((p.cx - slot.w / 2) * k, (p.cy - slot.h / 2) * k, slot.w * k, slot.h * k);
+        ctx.restore();
+      });
+      // The line the sheet is turned over on.
+      ctx.save();
+      ctx.setLineDash([8 * dpr, 6 * dpr]);
+      ctx.strokeStyle = '#e6007e';
+      ctx.lineWidth = Math.max(1, 1.2 * dpr);
+      ctx.beginPath();
+      ctx.moveTo((sheetW / 2) * k, 0);
+      ctx.lineTo((sheetW / 2) * k, sheetH * k);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Press marks (printed): colour bar and registration marks along the top.
+    if (plan.pressMarks) {
+      for (const b of plan.pressMarks.bar) {
+        const [c, m2, y, kk] = b.cmyk;
+        ctx.fillStyle = `rgb(${Math.round(255 * (1 - c) * (1 - kk))}, ${Math.round(255 * (1 - m2) * (1 - kk))}, ${Math.round(255 * (1 - y) * (1 - kk))})`;
+        ctx.fillRect(b.x * k, b.y * k, b.w * k, b.h * k);
+      }
+      ctx.strokeStyle = '#111111';
+      ctx.lineWidth = Math.max(1, 0.6 * dpr);
+      for (const t of plan.pressMarks.targets) {
+        ctx.beginPath();
+        ctx.arc(t.x * k, t.y * k, t.r * 0.6 * k, 0, Math.PI * 2);
+        ctx.moveTo((t.x - t.r) * k, t.y * k);
+        ctx.lineTo((t.x + t.r) * k, t.y * k);
+        ctx.moveTo(t.x * k, (t.y - t.r) * k);
+        ctx.lineTo(t.x * k, (t.y + t.r) * k);
+        ctx.stroke();
+      }
+    }
 
     // Crop marks (printed)
     ctx.strokeStyle = '#111111';
