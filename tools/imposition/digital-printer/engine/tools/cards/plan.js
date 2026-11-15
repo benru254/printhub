@@ -6,6 +6,7 @@ import { getSheet, orientSheet } from '../../core/sheets.js';
 import { computeArtFit } from '../../core/artFit.js';
 import { DEFAULT_PRINTER } from '../../core/printers.js';
 import { clampRadius } from '../../core/shapes.js';
+import { pressMarks, PRESS_STRIP } from '../../core/pressMarks.js';
 import { computeStepRepeat } from './layout.js';
 import { resolveSettings, MAX_BLEED, STANDARD_BLEED } from './settings.js';
 
@@ -41,6 +42,19 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
   const availBleed = madeBleed ? MAX_BLEED : sourceBleed;
   const settings = resolveSettings(base, overrides, { availBleed, printer, twoSided });
 
+  // Offset press options.
+  // Work and turn: fronts on the left half, backs on the right half, one set of plates.
+  // The sheet is turned left to right, so the left and right margins must be equal.
+  const plotter = base.cutter === 'plotter' || base.shape === 'contour';
+  const wantTurn = !!base.workAndTurn && twoSided && !plotter;
+  const printerTop = settings.margins.top;
+  if (wantTurn) {
+    const lr = Math.max(settings.margins.left, settings.margins.right);
+    settings.margins = { ...settings.margins, left: lr, right: lr };
+  }
+  // Press marks sit in a strip along the top, so the pieces start a little lower.
+  if (base.pressMarks) settings.margins = { ...settings.margins, top: printerTop + PRESS_STRIP };
+
   const layoutWithGap = (sheet, gap) =>
     computeStepRepeat({
       sheetW: sheet.w,
@@ -52,6 +66,7 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
       bleed: settings.bleedUsed,
       marks: settings.marks,
       allowRotate: settings.allowRotate,
+      evenCols: wantTurn,
     });
 
   // Smart gap: without bleed, pieces may share one cut line (gap 0) when that fits more.
@@ -99,6 +114,9 @@ export function planCards({ geometry, base, overrides = {}, customSheets = [], p
     layoutFor,
     resized,
     twoSided,
+    // true: ONE sheet side holds fronts (left half) and backs (right half).
+    workAndTurn: wantTurn && layout.count > 0 && layout.cols >= 2,
+    pressMarks: base.pressMarks && layout.count > 0 ? pressMarks(layout, printerTop) : null,
     // Always at least 1 piece, even if the number box held nothing or a letter.
     sheetsNeeded: layout.count ? Math.ceil(Math.max(1, Math.floor(Number(settings.copies)) || 1) / layout.count) : 0,
   };

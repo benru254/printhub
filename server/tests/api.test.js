@@ -1,5 +1,6 @@
-// API tests. They use TEST_DATABASE_URL (a separate, empty database): every run WIPES it.
-// Run: npm test
+// API tests. Run: npm test
+// With no TEST_DATABASE_URL they use the built-in database, in memory (nothing to set up).
+// With TEST_DATABASE_URL=postgres://... they use that database: every run WIPES it.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -40,10 +41,12 @@ function orderForm(fields = {}, file = PDF, name = 'cards.pdf') {
 }
 
 before(async () => {
-  // Safety: never wipe the real shop database.
-  const { db } = (await pool.query('SELECT current_database() AS db')).rows[0];
-  if (!/test/i.test(db) || process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) {
-    throw new Error(`Refusing to run tests on database "${db}". TEST_DATABASE_URL must point to a separate database with "test" in its name.`);
+  // Safety: never wipe the real shop database. (The built-in test database lives in memory only.)
+  if (config.databaseUrl !== 'memory') {
+    const { db } = (await pool.query('SELECT current_database() AS db')).rows[0];
+    if (!/test/i.test(db) || process.env.TEST_DATABASE_URL === process.env.DATABASE_URL) {
+      throw new Error(`Refusing to run tests on database "${db}". TEST_DATABASE_URL must point to a separate database with "test" in its name.`);
+    }
   }
   await pool.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await migrate();
@@ -261,7 +264,7 @@ test('money is a ledger: price change, payments, refund, balance', async () => {
 
   // The customer sees price, paid and balance, but not the ledger notes.
   const t = (await call('GET', `/orders/track/${paidCode}?phone=0733111222`)).body.order;
-  assert.deepEqual(t.money, { total: 600, paid: 500, balance: 100 });
+  assert.deepEqual(t.money, { total: 600, paid: 500, balance: 100, depositDue: 0 });
   assert.ok(t.events.some((e) => e.kind === 'payment' && e.amount === 300));
 
   const sum = (await call('GET', '/money/summary', { token: admin })).body.summary;
@@ -274,4 +277,283 @@ test('answers carry safety headers and are never cached', async () => {
   const r = await call('GET', '/health');
   assert.equal(r.res.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(r.res.headers.get('cache-control'), 'no-store');
+});
+
+// ---------- Part 10: products, proofs, "I have paid", order again, counter orders ----------
+
+const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('not a real picture, only the right first bytes')]);
+const CARDS = { id: 'business-cards', choice: { quantity: 100 } };
+
+// A product order: who, which product, what was chosen. No price, no tool, no settings.
+function productForm(product, fields = {}, file = PDF) {
+  const f = new FormData();
+  const all = { name: 'Wanjiru K', phone: '0722 555 666', product: JSON.stringify(product), ...fields };
+  for (const [k, v] of Object.entries(all)) f.append(k, v);
+  if (file) f.append('file', new Blob([file]), 'design.pdf');
+  return f;
+}
+
+let cust; // { code, key, token, id }
+
+test('shop: the catalogue is public, the admin edits it and the payment details', async () => {
+  const pub = (await call('GET', '/shop')).body;
+  assert.ok(pub.catalogue.products.length >= 10);
+  assert.equal(pub.shop.pay.method, 'none');
+  const bad = await call('PUT', '/shop', { token: admin, json: { catalogue: { products: [{ name: 'X', sizes: [] }] } } });
+  assert.equal(bad.status, 400);
+  assert.match(bad.body.error, /size/);
+  assert.equal((await call('PUT', '/shop', { token: operator, json: { catalogue: pub.catalogue } })).status, 401); // Kevin was switched off
+  const noNumber = await call('PUT', '/shop', { token: admin, json: { shop: { ...pub.shop, pay: { method: 'till', number: '12' } } } });
+  assert.equal(noNumber.status, 400);
+  // Hide one product, set the till number and a 50% deposit.
+  const catalogue = { products: pub.catalogue.products.map((p) => (p.id === 'certificates' ? { ...p, active: false } : p)) };
+  const ok = await call('PUT', '/shop', { token: admin, json: { catalogue, shop: { ...pub.shop, address: 'Kimathi St, Nairobi', pay: { method: 'till', number: '5 123 456', name: 'Dispatch Print', depositPct: 50 } } } });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  assert.equal(ok.body.shop.pay.number, '5123456');
+  assert.equal(ok.body.shop.name, 'Dispatch Print');
+  assert.equal(ok.body.catalogue.products.find((p) => p.id === 'certificates').active, false);
+});
+
+test('a product order is priced, set up and dated by the server', async () => {
+  // The phone tries to send its own price, tool and quantity: all ignored.
+  const r = await call('POST', '/orders', { form: productForm(CARDS, { quantity: '1', tool: 'hack', title: 'Free cards', priceSpec: JSON.stringify(SPEC), notes: 'Call me first' }) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  // 100 cards = 5 A3 sheets x (40 card + 2 x 30 colour) = 500, cutting 110 -> 610. Deposit 50% -> 310.
+  assert.deepEqual(r.body.estimate, { total: 610, currency: 'KES', deposit: 310 });
+  assert.ok(r.body.key.length >= 16 && r.body.customerToken && r.body.id === undefined);
+  const due = new Date(r.body.dueAt);
+  assert.ok(due.getDay() !== 0 && due.getTime() > Date.now() - 1000, 'ready on a day the shop is open');
+  cust = { code: r.body.code, key: r.body.key, token: r.body.customerToken };
+
+  const o = (await call('GET', '/orders?q=Wanjiru', { token: admin })).body.orders[0];
+  cust.id = o.id;
+  assert.deepEqual([o.title, o.quantity, o.tool, o.productId, o.source, o.artwork, o.total], ['Business cards', 100, 'cards', 'business-cards', 'web', 'upload', 610]);
+  assert.match(o.summary.detail, /90 × 55 mm · Art card 300 gsm · colour · both sides/);
+  const full = (await call('GET', `/orders/${o.id}`, { token: admin })).body.order;
+  assert.deepEqual(full.recipe.base.size, { w: 90, h: 55 });
+  assert.equal(full.recipe.base.copies, 100);
+  assert.equal(full.money.depositDue, 310);
+  assert.equal(full.files[0].kind, 'original');
+});
+
+test('no design yet: the shop designs it (fee) or the customer sends it later', async () => {
+  assert.equal((await call('POST', '/orders', { form: productForm(CARDS, {}, null) })).status, 400); // "upload" needs a file
+  const design = await call('POST', '/orders', { form: productForm(CARDS, { artwork: 'design', notes: 'Blue, with my logo' }, null) });
+  assert.equal(design.status, 201, JSON.stringify(design.body));
+  assert.equal(design.body.estimate.total, 1110); // 610 + 500 design
+  // A logo sent with a design request is kept as a reference, not as the design.
+  const withLogo = await call('POST', '/orders', { form: productForm(CARDS, { artwork: 'design', phone: '0722 555 777', name: 'Logo Man' }, PNG) });
+  const o = (await call('GET', '/orders?q=Logo', { token: admin })).body.orders[0];
+  assert.equal((await call('GET', `/orders/${o.id}`, { token: admin })).body.order.files[0].kind, 'reference');
+  assert.equal(withLogo.body.estimate.total, 1110);
+
+  const later = await call('POST', '/orders', { form: productForm({ id: 'banners', choice: { size: '1x2' } }, { artwork: 'later', delivery: 'deliver', address: 'Moi Avenue, opposite the bank' }, null) });
+  assert.equal(later.status, 201, JSON.stringify(later.body));
+  assert.equal(later.body.estimate.total, 2020); // banner 1820 + delivery 200
+  assert.equal((await call('POST', '/orders', { form: productForm(CARDS, { artwork: 'later', delivery: 'deliver' }, null) })).status, 400); // deliver where?
+  // The customer sends the design afterwards: with the key from their link, no phone number needed.
+  const f = new FormData();
+  f.append('key', later.body.key);
+  f.append('file', new Blob([PDF]), 'banner.pdf');
+  const sent = await call('POST', `/orders/track/${later.body.code}/files`, { form: f });
+  assert.equal(sent.status, 201, JSON.stringify(sent.body));
+  assert.equal(sent.body.order.artwork, 'upload');
+  assert.ok(sent.body.order.events.some((e) => e.kind === 'file' && e.message === 'Design received'));
+  const noKey = new FormData();
+  noKey.append('file', new Blob([PDF]), 'x.pdf');
+  assert.equal((await call('POST', `/orders/track/${later.body.code}/files`, { form: noKey })).status, 404);
+});
+
+test('products that are hidden or unknown cannot be ordered; express costs extra', async () => {
+  assert.equal((await call('POST', '/orders', { form: productForm({ id: 'certificates', choice: {} }) })).status, 400);
+  assert.equal((await call('POST', '/orders', { form: productForm({ id: 'gold-bars', choice: {} }) })).status, 400);
+  const std = await call('POST', '/orders', { form: productForm({ id: 'invitation-cards', choice: { quantity: 100 } }) });
+  const exp = await call('POST', '/orders', { form: productForm({ id: 'invitation-cards', choice: { quantity: 100 }, speed: 'express' }) });
+  assert.equal(std.status, 201);
+  assert.ok(exp.body.estimate.total > std.body.estimate.total, 'express costs more');
+  assert.ok(new Date(exp.body.dueAt) < new Date(std.body.dueAt), 'and is ready sooner');
+});
+
+test('the customer follows the order with the link key, and sees all their orders', async () => {
+  const byKey = await call('GET', `/orders/track/${cust.code}?key=${cust.key}`);
+  assert.equal(byKey.status, 200);
+  assert.deepEqual(byKey.body.order.money, { total: 610, paid: 0, balance: 610, depositDue: 310 });
+  assert.equal(byKey.body.order.lines.length, 2);
+  assert.equal((await call('GET', `/orders/track/${cust.code}?key=${'x'.repeat(16)}`)).status, 404);
+  assert.equal((await call('GET', `/orders/track/${cust.code}?phone=0722555666`)).status, 200);
+
+  const mine = await call('GET', '/me/orders', { token: cust.token });
+  assert.equal(mine.status, 200);
+  assert.equal(mine.body.customer.name, 'Wanjiru K');
+  assert.ok(mine.body.orders.length >= 3 && mine.body.orders.every((o) => o.key && o.statusText));
+  // A customer's token is not a staff login, and a staff login is not a customer.
+  assert.equal((await call('GET', '/orders', { token: cust.token })).status, 401);
+  assert.equal((await call('GET', '/me/orders', { token: admin })).status, 401);
+  assert.equal((await call('GET', '/me/orders')).status, 401);
+  // A new phone: phone number + any order code.
+  const login = await call('POST', '/me/login', { json: { phone: '0722 555 666', code: cust.code } });
+  assert.equal(login.status, 200);
+  assert.ok(login.body.customerToken && login.body.orders.length >= 3);
+  assert.equal((await call('POST', '/me/login', { json: { phone: '0700 000 000', code: cust.code } })).status, 404);
+});
+
+test('proof: the customer must approve before printing', async () => {
+  const send = (name = 'proof.png') => {
+    const f = new FormData();
+    f.append('kind', 'proof');
+    f.append('file', new Blob([PNG]), name);
+    return call('POST', `/orders/${cust.id}/files`, { token: admin, form: f });
+  };
+  assert.equal((await call('GET', `/orders/track/${cust.code}/proof?key=${cust.key}`)).status, 404); // none yet
+  const sent = await send();
+  assert.equal(sent.status, 201, JSON.stringify(sent.body));
+  assert.deepEqual([sent.body.order.status, sent.body.order.proofState], ['proof', 'sent']);
+
+  // The customer sees it.
+  const t = (await call('GET', `/orders/track/${cust.code}?key=${cust.key}`)).body.order;
+  assert.deepEqual([t.status, t.proof.state, t.proof.mime], ['proof', 'sent', 'image/png']);
+  const file = await call('GET', `/orders/track/${cust.code}/proof?key=${cust.key}`);
+  assert.equal(file.status, 200);
+  assert.equal(file.res.headers.get('content-type'), 'image/png');
+  assert.equal(file.body.length, PNG.length);
+  assert.equal((await call('GET', `/orders/track/${cust.code}/proof?key=wrong-key-wrong-key`)).status, 404);
+
+  // Printing is held back.
+  const early = await call('PATCH', `/orders/${cust.id}`, { token: admin, json: { status: 'printing' } });
+  assert.equal(early.status, 409);
+  assert.equal(early.body.needs, 'approvedElsewhere');
+
+  // The customer asks for a change: back to the operator, with the message.
+  assert.equal((await call('POST', `/orders/track/${cust.code}/proof`, { json: { key: cust.key, action: 'change', message: '' } })).status, 400);
+  const change = await call('POST', `/orders/track/${cust.code}/proof`, { json: { key: cust.key, action: 'change', message: 'Make the phone number bigger' } });
+  assert.deepEqual([change.body.order.status, change.body.order.proof.state], ['checking', 'changes']);
+  const seen = (await call('GET', `/orders/${cust.id}`, { token: admin })).body.order;
+  assert.ok(seen.events.some((e) => e.kind === 'proof' && e.data.message === 'Make the phone number bigger'));
+
+  // A new proof, approved this time. It cannot be answered twice.
+  await send('proof-2.png');
+  const yes = await call('POST', `/orders/track/${cust.code}/proof`, { json: { phone: '0722555666', action: 'approve' } });
+  assert.deepEqual([yes.body.order.status, yes.body.order.proof.state], ['approved', 'approved']);
+  assert.equal((await call('POST', `/orders/track/${cust.code}/proof`, { json: { key: cust.key, action: 'approve' } })).status, 400);
+  assert.equal((await call('PATCH', `/orders/${cust.id}`, { token: admin, json: { status: 'printing' } })).status, 200);
+});
+
+test('proof approved by phone: staff can say so, and it is written down', async () => {
+  const r = await call('POST', '/orders', { form: productForm(CARDS, { phone: '0722 555 888', name: 'Phone Approver' }) });
+  const id = (await call('GET', '/orders?q=Approver', { token: admin })).body.orders[0].id;
+  const f = new FormData();
+  f.append('kind', 'proof');
+  f.append('file', new Blob([PNG]), 'p.png');
+  await call('POST', `/orders/${id}/files`, { token: admin, form: f });
+  const ok = await call('PATCH', `/orders/${id}`, { token: admin, json: { status: 'printing', approvedElsewhere: true } });
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.order.proofState, 'approved');
+  const t = (await call('GET', `/orders/track/${r.body.code}?key=${r.body.key}`)).body.order;
+  assert.ok(t.events.some((e) => e.kind === 'proof' && e.message === 'Approved by phone or WhatsApp'));
+});
+
+test('"I have paid": the customer pastes the M-Pesa message, staff confirm it', async () => {
+  const sms = 'UKB7XY12QP Confirmed. Ksh310.00 sent to DISPATCH PRINT for account on 15/11/26 at 10:02 AM.';
+  const none = await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: 'I paid yesterday' } });
+  assert.equal(none.status, 400);
+  const claim = await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: sms } });
+  assert.equal(claim.status, 201, JSON.stringify(claim.body));
+  assert.deepEqual(claim.body.order.claims.map((c) => [c.reference, c.amount, c.status]), [['UKB7XY12QP', 310, 'pending']]);
+  assert.equal(claim.body.order.money.paid, 0, 'a claim is not money yet');
+  // The same code again, on this order or another one.
+  assert.equal((await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: 'ukb7xy12qp' } })).status, 400);
+  assert.match((await call('POST', `/orders/track/${paidCode}/paid`, { json: { phone: '0733111222', text: 'UKB7XY12QP' } })).body.error, /another order/);
+  // A code already in the ledger.
+  assert.match((await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: 'TKA1B2C3D4' } })).body.error, /already recorded/);
+
+  const order = (await call('GET', `/orders/${cust.id}`, { token: admin })).body.order;
+  assert.equal(order.claims, 1);
+  const c = order.claimList[0];
+  const done = await call('POST', `/orders/${cust.id}/claims/${c.id}`, { token: admin, json: { action: 'confirm' } });
+  assert.equal(done.status, 200, JSON.stringify(done.body));
+  assert.deepEqual([done.body.order.money.paid, done.body.order.money.balance, done.body.order.money.depositDue, done.body.order.claims], [310, 300, 0, 0]);
+  assert.equal(done.body.order.money.entries.at(-1).reference, 'UKB7XY12QP');
+  assert.equal((await call('POST', `/orders/${cust.id}/claims/${c.id}`, { token: admin, json: { action: 'confirm' } })).status, 400); // only once
+
+  // A code the shop cannot find: rejected, the customer is told, and they may try again.
+  await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: 'ZZZ9ZZZ9ZZ', amount: 300 } });
+  const list = (await call('GET', `/orders/${cust.id}`, { token: admin })).body.order.claimList;
+  const rejected = await call('POST', `/orders/${cust.id}/claims/${list.at(-1).id}`, { token: admin, json: { action: 'reject' } });
+  assert.equal(rejected.body.order.money.paid, 310);
+  const t = (await call('GET', `/orders/track/${cust.code}?key=${cust.key}`)).body.order;
+  assert.ok(t.events.some((e) => e.kind === 'claim' && e.action === 'rejected'));
+  assert.equal((await call('POST', `/orders/track/${cust.code}/paid`, { json: { key: cust.key, text: 'ZZZ9ZZZ9ZZ', amount: 300 } })).status, 201);
+});
+
+test('an order that is not fully paid is only handed over on purpose', async () => {
+  await call('PATCH', `/orders/${cust.id}`, { token: admin, json: { status: 'ready' } });
+  const stop = await call('PATCH', `/orders/${cust.id}`, { token: admin, json: { status: 'collected' } });
+  assert.equal(stop.status, 409);
+  assert.deepEqual([stop.body.needs, stop.body.balance], ['allowOwing', 300]);
+  const go = await call('PATCH', `/orders/${cust.id}`, { token: admin, json: { status: 'collected', allowOwing: true } });
+  assert.equal(go.status, 200);
+  assert.ok(go.body.order.events.some((e) => e.kind === 'note' && /still to pay/.test(e.data.text)));
+  // It shows under "owing" customers.
+  const owing = (await call('GET', '/customers?filter=owing', { token: admin })).body.customers;
+  const w = owing.find((c) => c.name === 'Wanjiru K');
+  assert.ok(w && w.owes >= 300 && w.orders >= 3);
+  assert.ok(owing.every((c) => c.owes > 0));
+  const one = (await call('GET', `/customers/${w.id}`, { token: admin })).body.customer;
+  assert.ok(one.orders.length >= 3 && one.orders[0].total > 0);
+});
+
+test('order again: same job, today\'s price, the same design, no second design fee', async () => {
+  const again = await call('POST', `/orders/track/${cust.code}/reorder`, { json: { key: cust.key, quantity: 200, clientKey: 'reorder-key-0123456789' } });
+  assert.equal(again.status, 201, JSON.stringify(again.body));
+  assert.notEqual(again.body.code, cust.code);
+  // 200 cards = 10 sheets x 100 = 1000 + cutting 120 = 1120
+  assert.equal(again.body.estimate.total, 1120);
+  const twice = await call('POST', `/orders/track/${cust.code}/reorder`, { json: { key: cust.key, quantity: 200, clientKey: 'reorder-key-0123456789' } });
+  assert.deepEqual([twice.status, twice.body.code], [200, again.body.code]);
+  const o = (await call('GET', '/orders?q=Wanjiru&status=new', { token: admin })).body.orders.find((x) => x.code === again.body.code);
+  assert.deepEqual([o.source, o.quantity, o.artwork], ['reorder', 200, 'upload']);
+  const full = (await call('GET', `/orders/${o.id}`, { token: admin })).body.order;
+  assert.equal(full.reorderCode, cust.code);
+  assert.equal(full.files.length, 1);
+  assert.equal(full.files[0].kind, 'original');
+  // The copy is its own file: the first order still has its files.
+  const dl = await call('GET', `/orders/${o.id}/files/${full.files[0].id}`, { token: admin });
+  assert.equal(dl.body.length, PDF.length);
+  assert.equal((await call('GET', `/orders/${cust.id}`, { token: admin })).body.order.files.filter((f) => f.kind === 'original').length, 1);
+  assert.equal((await call('POST', `/orders/track/${cust.code}/reorder`, { json: { key: 'nope-nope-nope-nope' } })).status, 404);
+});
+
+test('numbered receipt books carry on from the last number', async () => {
+  const books = { id: 'receipt-books', choice: { quantity: 5, sets: 50, parts: 2, numberFrom: 1 } };
+  const first = await call('POST', '/orders', { form: productForm(books, { phone: '0711 222 333', name: 'Duka Supplies' }) });
+  assert.equal(first.status, 201, JSON.stringify(first.body));
+  const again = await call('POST', `/orders/track/${first.body.code}/reorder`, { json: { key: first.body.key } });
+  const o = (await call('GET', '/orders?q=Duka', { token: admin })).body.orders.find((x) => x.code === again.body.code);
+  assert.deepEqual([o.summary.numberFrom, o.summary.numberTo], [251, 500]);
+  const recipe = (await call('GET', `/orders/${o.id}`, { token: admin })).body.order.recipe;
+  assert.deepEqual([recipe.tool, recipe.extra.numbering.start, recipe.extra.numbering.count], ['cutstack', 251, 250]);
+});
+
+test('counter order: staff type it in for a walk-in customer', async () => {
+  const r = await call('POST', '/orders', { token: admin, form: productForm({ id: 'flyers', choice: { quantity: 250 } }, { phone: '0700 123 456', name: 'Walk In', artwork: 'later' }, null) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.ok(r.body.id > 0 && r.body.customerToken === undefined);
+  const o = (await call('GET', `/orders/${r.body.id}`, { token: admin })).body.order;
+  assert.deepEqual([o.source, o.customerName, o.artwork], ['counter', 'Walk In', 'later']);
+  assert.ok(o.trackKey.length >= 16);
+  // Staff can also repeat an order for a customer.
+  const rep = await call('POST', `/orders/${cust.id}/reorder`, { token: admin, json: {} });
+  assert.equal(rep.status, 201, JSON.stringify(rep.body));
+  assert.ok(rep.body.id > 0);
+  assert.equal((await call('POST', `/orders/${cust.id}/reorder`, { json: {} })).status, 401);
+});
+
+test('open orders are listed soonest-needed first; the local address is for staff only', async () => {
+  const open = (await call('GET', '/orders?status=open', { token: admin })).body.orders;
+  const dues = open.filter((o) => o.dueAt).map((o) => new Date(o.dueAt).getTime());
+  assert.deepEqual(dues, [...dues].sort((a, b) => a - b));
+  assert.equal((await call('GET', '/local')).status, 401);
+  const local = await call('GET', '/local', { token: admin });
+  assert.equal(local.status, 200);
+  assert.ok(Array.isArray(local.body.addresses) && ['postgres', 'built-in'].includes(local.body.database));
 });

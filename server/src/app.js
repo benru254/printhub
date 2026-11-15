@@ -1,5 +1,6 @@
 // The Express app (no listening here, so tests can use it directly).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -11,10 +12,21 @@ import { orderRoutes } from './modules/orders/orders.routes.js';
 import { fileRoutes } from './modules/files/files.routes.js';
 import { shopRoutes } from './modules/shop/shop.routes.js';
 import { moneyRoutes } from './modules/money/money.routes.js';
+import { requireStaff } from './middleware/auth.js';
+import { config, usingPostgres } from './config.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // The built imposition app (npm run build in tools/imposition/digital-printer), if it exists.
 const APP_DIST = path.resolve(here, '../../tools/imposition/digital-printer/dist');
+
+// http://192.168.x.x:5181 for every network this computer is on.
+export function lanAddresses(port) {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) {
+    for (const n of list || []) if (n.family === 'IPv4' && !n.internal) out.push(`http://${n.address}:${port}`);
+  }
+  return out;
+}
 
 export function createApp() {
   const app = express();
@@ -35,6 +47,10 @@ export function createApp() {
     next();
   });
   api.get('/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+  // Staff: how this server is running, and the addresses to open it from a phone on the same Wi-Fi.
+  api.get('/local', requireStaff, (_req, res) => {
+    res.json({ addresses: lanAddresses(config.port), database: usingPostgres ? 'postgres' : 'built-in', appBuilt: fs.existsSync(path.join(APP_DIST, 'index.html')) });
+  });
   api.use(authRoutes);
   api.use(staffRoutes);
   api.use(customerRoutes);

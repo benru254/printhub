@@ -87,6 +87,22 @@ export function drawCropMarks(sheet, layout, { isBack, flip }) {
   }
 }
 
+// Colour bar and registration marks of an offset sheet (see core/pressMarks.js).
+export function drawPressMarks(sheet, marks, sheetH) {
+  if (!marks) return;
+  for (const b of marks.bar) {
+    sheet.drawRectangle({ x: mmToPt(b.x), y: mmToPt(sheetH - b.y - b.h), width: mmToPt(b.w), height: mmToPt(b.h), color: cmyk(...b.cmyk) });
+  }
+  for (const t of marks.targets) {
+    const x = mmToPt(t.x);
+    const y = mmToPt(sheetH - t.y);
+    const r = mmToPt(t.r);
+    sheet.drawCircle({ x, y, size: r * 0.6, borderColor: REGISTRATION, borderWidth: 0.3 });
+    sheet.drawLine({ start: { x: x - r, y }, end: { x: x + r, y }, thickness: 0.3, color: REGISTRATION });
+    sheet.drawLine({ start: { x, y: y - r }, end: { x, y: y + r }, thickness: 0.3, color: REGISTRATION });
+  }
+}
+
 /**
  * Writes text centred on a point of a piece.
  * at: { x, y } in mm from the top-left of the finished piece. size in points.

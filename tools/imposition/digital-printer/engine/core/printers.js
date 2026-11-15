@@ -35,6 +35,12 @@ export const PRINTER_TEMPLATES = [
     values: { name: 'SRA3 press', margins: { top: 6, right: 4, bottom: 4, left: 4 }, sheets: ['A4', 'A3', 'SRA3'], defaultSheet: 'SRA3', duplex: true },
   },
   {
+    // The press holds the sheet by one edge (the gripper): nothing prints in those 12 mm.
+    key: 'offset-press',
+    label: 'Offset press',
+    values: { name: 'Offset press', margins: { top: 5, right: 5, bottom: 12, left: 5 }, sheets: ['GTO', 'SRA2', 'B2'], defaultSheet: 'SRA2', duplex: true, press: true },
+  },
+  {
     key: 'large-format',
     label: 'Large format printer',
     values: { name: 'Large format printer', margins: uniformMargins(5), sheets: ['A3', 'A2'], defaultSheet: 'A2', duplex: false },
@@ -94,6 +100,7 @@ export function normalizePrinter(p, availableSheetIds = []) {
     orientation: base.orientation === 'landscape' ? 'landscape' : 'portrait',
     duplex: base.duplex !== false,
     flip: base.flip === 'calendar' ? 'calendar' : 'book',
+    press: !!base.press, // an offset press: colour bar, registration marks and work-and-turn start switched on
   };
 }
 

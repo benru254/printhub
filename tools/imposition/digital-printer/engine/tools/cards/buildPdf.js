@@ -9,7 +9,7 @@
 
 import { PDFDocument } from 'pdf-lib';
 import { mmToPt } from '../../core/units.js';
-import { embedPiece, drawPieceAt, drawCropMarks } from '../../core/pdfPieces.js';
+import { embedPiece, drawPieceAt, drawCropMarks, drawPressMarks } from '../../core/pdfPieces.js';
 import { drawCutContours } from '../../core/cutContour.js';
 
 export async function buildCardsPdf({ sourceBytes, plan, title = 'Imposed sheet', bleedArt = null }) {
@@ -29,18 +29,37 @@ export async function buildCardsPdf({ sourceBytes, plan, title = 'Imposed sheet'
 
   const { sheetW, sheetH } = layout;
 
+  const pieces = [];
   for (let i = 0; i < sides.length; i++) {
-    const isBack = i === 1;
-    const piece = await embedPiece(out, src, {
+    pieces.push(await embedPiece(out, src, {
       page: sides[i],
       fit: fits[i],
       effBleed: layout.effBleed,
       out: plan.out,
       bleedArt: useMade ? bleedArt[i] : null,
-    });
+    }));
+  }
+
+  if (plan.workAndTurn) {
+    // ONE page for both sides: each front (left half) has its back mirrored onto the right half.
+    // Print, turn the stack left to right (same gripper edge), print again with the same plates.
     const sheet = out.addPage([mmToPt(sheetW), mmToPt(sheetH)]);
-    for (const slot of layout.slots) drawPieceAt(sheet, piece, slot, { isBack, sheetW, sheetH, flip });
+    layout.slots.forEach((slot, index) => {
+      if (index % layout.cols >= layout.cols / 2) return;
+      drawPieceAt(sheet, pieces[0], slot, { isBack: false, sheetW, sheetH, flip: 'book' });
+      drawPieceAt(sheet, pieces[1], slot, { isBack: true, sheetW, sheetH, flip: 'book' });
+    });
+    drawCropMarks(sheet, layout, { isBack: false, flip: 'book' });
+    if (plan.pressMarks) drawPressMarks(sheet, plan.pressMarks, sheetH);
+    return out.save();
+  }
+
+  for (let i = 0; i < sides.length; i++) {
+    const isBack = i === 1;
+    const sheet = out.addPage([mmToPt(sheetW), mmToPt(sheetH)]);
+    for (const slot of layout.slots) drawPieceAt(sheet, pieces[i], slot, { isBack, sheetW, sheetH, flip });
     drawCropMarks(sheet, layout, { isBack, flip });
+    if (plan.pressMarks) drawPressMarks(sheet, plan.pressMarks, sheetH);
     // Sticker cutter: the cut line goes on the front only (that is the side the cutter reads).
     if (!isBack && plan.shape && plan.shape.cutter === 'plotter') {
       drawCutContours(out, sheet, layout, plan.out, plan.shape);

@@ -11,6 +11,11 @@ export async function addMoney(req, res) {
   res.status(201).json({ order: await getOrder(Number(req.params.id)) });
 }
 
+export async function decideClaim(req, res) {
+  await money.decideClaim(req.staff.id, Number(req.params.id), Number(req.params.claimId), req.body || {});
+  res.json({ order: await getOrder(Number(req.params.id)) });
+}
+
 export async function summary(req, res) {
   res.json({ summary: await money.daySummary({ from: req.query.from, to: req.query.to }) });
 }

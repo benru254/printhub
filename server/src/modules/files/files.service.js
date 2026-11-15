@@ -10,7 +10,11 @@ import { config } from '../../config.js';
 import { all, get } from '../../db.js';
 import { badRequest, notFound } from '../../lib/errors.js';
 
-export const FILE_KINDS = ['original', 'imposed', 'operator'];
+// original  = the customer's design      operator = the design fixed by the shop
+// imposed   = print-ready sheets          proof    = the picture the customer approves
+// reference = a logo, photo or sketch the customer sent for the shop to design from
+export const FILE_KINDS = ['original', 'imposed', 'operator', 'proof', 'reference'];
+export const STAFF_FILE_KINDS = ['imposed', 'operator', 'proof', 'reference'];
 
 // Only these, checked by the first bytes of the file (not the name the phone sends).
 const TYPES = [
@@ -56,6 +60,30 @@ async function firstBytes(file) {
 
 export async function discardUpload(file) {
   if (file && file.path) await fsp.rm(file.path, { force: true });
+}
+
+// A second copy of a stored file, for "order again": the new order gets its own file,
+// so nothing done to one order can change the other. file = { storedName, name, mime }.
+export async function copyStoredFile(file) {
+  const from = path.resolve(config.uploadDir, file.storedName);
+  if (!from.startsWith(config.uploadDir + path.sep)) throw notFound('File not found.');
+  const dir = path.join(config.uploadDir, monthFolder());
+  await fsp.mkdir(dir, { recursive: true });
+  const to = path.join(dir, `${crypto.randomUUID()}${path.extname(from)}`);
+  try {
+    await fsp.copyFile(from, to);
+  } catch {
+    throw notFound('The design of that order is missing from the server folder.');
+  }
+  const stat = await fsp.stat(to);
+  return {
+    originalName: file.name,
+    storedName: path.relative(config.uploadDir, to).split(path.sep).join('/'),
+    mime: file.mime,
+    size: stat.size,
+    sha256: await sha256(to),
+    fullPath: to,
+  };
 }
 
 // Checks the uploaded file and renames it to its real type. Returns what to store in order_files.

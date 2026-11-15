@@ -3,7 +3,8 @@
 // Runs on every server start, so it is safe to run many times.
 import { run } from './db.js';
 
-export const ORDER_STATUSES = ['new', 'checking', 'needs_customer', 'approved', 'printing', 'ready', 'collected', 'cancelled'];
+// 'proof' = a picture of the finished job is with the customer, waiting for their OK.
+export const ORDER_STATUSES = ['new', 'checking', 'needs_customer', 'proof', 'approved', 'printing', 'ready', 'collected', 'cancelled'];
 
 const STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS staff (
@@ -119,6 +120,46 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS order_ledger_order_idx ON order_ledger (order_id)`,
   // The same M-Pesa code can never be recorded twice.
   `CREATE UNIQUE INDEX IF NOT EXISTS order_ledger_reference_idx ON order_ledger (method, upper(reference)) WHERE kind = 'payment' AND reference IS NOT NULL AND reference <> ''`,
+
+  // ---- Part 10: products, proofs, "I have paid", order again ----
+
+  // A secret in the customer's tracking link, so the link opens the order without typing the phone number.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS track_key TEXT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS orders_track_key_idx ON orders (track_key) WHERE track_key IS NOT NULL`,
+  // Where the order came from: 'web' (the customer's phone), 'counter' (typed in by staff), 'reorder'.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'web'`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by_staff_id INTEGER REFERENCES staff(id)`,
+  // The catalogue product (settings 'catalogue'), when the order was made from one.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS product_id TEXT`,
+  // 'upload' = the customer sent the design, 'design' = the shop makes it, 'later' = the customer sends it later.
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS artwork TEXT NOT NULL DEFAULT 'upload'`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery TEXT NOT NULL DEFAULT 'collect'`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS address TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS reorder_of INTEGER REFERENCES orders(id)`,
+  // The proof: null (none sent), 'sent', 'approved' or 'changes' (the customer asked for a change).
+  `ALTER TABLE orders ADD COLUMN IF NOT EXISTS proof_state TEXT`,
+
+  // Two more kinds of file: 'proof' (shown to the customer) and 'reference' (logo, photo, sketch from the customer).
+  `ALTER TABLE order_files DROP CONSTRAINT IF EXISTS order_files_kind_check`,
+  `ALTER TABLE order_files ADD CONSTRAINT order_files_kind_check CHECK (kind IN ('original', 'imposed', 'operator', 'proof', 'reference'))`,
+
+  // "I have paid": what the customer says they sent. It is NOT money yet. Staff check their
+  // M-Pesa and confirm it (which adds the payment to the ledger) or reject it.
+  `CREATE TABLE IF NOT EXISTS payment_claims (
+    id SERIAL PRIMARY KEY,
+    order_id INTEGER NOT NULL REFERENCES orders(id),
+    method TEXT NOT NULL DEFAULT 'mpesa',
+    reference TEXT NOT NULL,
+    amount_cents BIGINT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'rejected')),
+    note TEXT NOT NULL DEFAULT '',
+    decided_by_staff_id INTEGER REFERENCES staff(id),
+    decided_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`,
+  `CREATE INDEX IF NOT EXISTS payment_claims_order_idx ON payment_claims (order_id)`,
+  // The same code cannot be claimed twice (unless the first claim was rejected).
+  `CREATE UNIQUE INDEX IF NOT EXISTS payment_claims_reference_idx ON payment_claims (upper(reference)) WHERE status <> 'rejected'`,
 ];
 
 export async function migrate() {

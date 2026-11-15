@@ -3,6 +3,7 @@
 // Amounts are kept in cents (whole numbers) so there are no rounding surprises.
 import { all, get, transaction } from '../../db.js';
 import { badRequest, notFound } from '../../lib/errors.js';
+import { parseMpesa } from '../../../../tools/imposition/digital-printer/engine/core/mpesa.js';
 
 export const PAYMENT_METHODS = ['cash', 'mpesa', 'bank', 'card', 'other'];
 
@@ -111,6 +112,70 @@ export async function addMoney(staffId, orderId, { kind = 'payment', amount, met
       [orderId, staffId, kind, { amount: fromCents(cents), method }]
     );
     await tx.run('UPDATE orders SET updated_at = now() WHERE id = $1', [orderId]);
+  });
+}
+
+// ---------- "I have paid" ----------
+// The customer tells us the M-Pesa code (or pastes the whole message). That is a CLAIM,
+// not money: staff look at their own M-Pesa and confirm it, which adds the payment to the
+// ledger, or reject it.
+
+export async function claimsFor(orderId, db = { all }) {
+  const rows = await db.all(
+    `SELECT c.id, c.method, c.reference, c.amount_cents, c.status, c.note, c.created_at AS "at", c.decided_at AS "decidedAt", s.name AS "decidedBy"
+       FROM payment_claims c LEFT JOIN staff s ON s.id = c.decided_by_staff_id
+      WHERE c.order_id = $1 ORDER BY c.created_at, c.id`,
+    [orderId]
+  );
+  return rows.map((r) => ({ ...r, amount: r.amount_cents == null ? null : fromCents(r.amount_cents), amount_cents: undefined }));
+}
+
+// tx = inside the caller's transaction (the order row is already locked).
+export async function addClaim(tx, orderId, { text, amount }) {
+  const read = parseMpesa(text);
+  if (!read.code) throw badRequest('Paste the M-Pesa message, or type its code (e.g. TKA1B2C3D4).');
+  const typed = Number(amount);
+  const value = Number.isFinite(typed) && typed > 0 ? typed : read.amount;
+  const paid = await tx.get(`SELECT 1 FROM order_ledger WHERE kind = 'payment' AND upper(reference) = $1`, [read.code]);
+  if (paid) throw badRequest('That payment is already recorded. Thank you!');
+  const claimed = await tx.get(`SELECT order_id FROM payment_claims WHERE upper(reference) = $1 AND status <> 'rejected'`, [read.code]);
+  if (claimed) throw badRequest(claimed.order_id === orderId ? 'You have already sent us that code. The shop is checking it.' : 'That code has already been used for another order.');
+  await tx.run(
+    `INSERT INTO payment_claims (order_id, method, reference, amount_cents) VALUES ($1, 'mpesa', $2, $3)`,
+    [orderId, read.code, value ? toCents(value) : null]
+  );
+  await tx.run(
+    `INSERT INTO order_events (order_id, kind, data, public) VALUES ($1, 'claim', $2, TRUE)`,
+    [orderId, { reference: read.code, ...(value ? { amount: value } : {}), message: 'You told us you paid. The shop is checking.' }]
+  );
+  await tx.run('UPDATE orders SET updated_at = now() WHERE id = $1', [orderId]);
+  return { reference: read.code, amount: value || null };
+}
+
+// Staff: 'confirm' (the money is really there: it goes into the ledger) or 'reject'.
+export async function decideClaim(staffId, orderId, claimId, { action, amount, note = '' }) {
+  if (action !== 'confirm' && action !== 'reject') throw badRequest('Choose Confirm or Not received.');
+  const claim = await get('SELECT * FROM payment_claims WHERE id = $1 AND order_id = $2', [claimId, orderId]);
+  if (!claim) throw notFound('That payment message was not found.');
+  if (claim.status !== 'pending') throw badRequest('This one has already been dealt with.');
+  if (action === 'confirm') {
+    const value = Number(amount) > 0 ? Number(amount) : claim.amount_cents != null ? fromCents(claim.amount_cents) : null;
+    if (!value) throw badRequest('Enter the amount that came in.');
+    // The payment goes through the normal door, so every rule (no code twice) still holds.
+    await addMoney(staffId, orderId, { kind: 'payment', amount: value, method: claim.method, reference: claim.reference, note: 'Confirmed from the customer’s message' });
+  }
+  await transaction(async (tx) => {
+    await tx.run(
+      `UPDATE payment_claims SET status = $1, decided_by_staff_id = $2, decided_at = now(), note = $3 WHERE id = $4`,
+      [action === 'confirm' ? 'confirmed' : 'rejected', staffId, String(note || '').trim().slice(0, 300), claimId]
+    );
+    if (action === 'reject') {
+      await tx.run(
+        `INSERT INTO order_events (order_id, staff_id, kind, data, public) VALUES ($1, $2, 'claim', $3, TRUE)`,
+        [orderId, staffId, { reference: claim.reference, action: 'rejected', message: `We could not find payment ${claim.reference}. Please check the code or contact the shop.` }]
+      );
+      await tx.run('UPDATE orders SET updated_at = now() WHERE id = $1', [orderId]);
+    }
   });
 }
 

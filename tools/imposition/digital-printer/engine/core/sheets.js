@@ -11,9 +11,15 @@ export const SHEETS = {
   SRA3: { id: 'SRA3', label: 'SRA3', w: 320, h: 450 },
   A2: { id: 'A2', label: 'A2', w: 420, h: 594 },
   Letter: { id: 'Letter', label: 'Letter', w: 215.9, h: 279.4 },
+  // Offset press sheets
+  GTO: { id: 'GTO', label: '360×520', w: 360, h: 520 },
+  SRA2: { id: 'SRA2', label: 'SRA2', w: 450, h: 640 },
+  B2: { id: 'B2', label: 'B2', w: 500, h: 707 },
+  A1: { id: 'A1', label: 'A1', w: 594, h: 841 },
+  B1: { id: 'B1', label: 'B1', w: 707, h: 1000 },
 };
 
-export const SHEET_ORDER = ['A6', 'A5', 'A4', 'A3', 'SRA3', 'A2', 'Letter'];
+export const SHEET_ORDER = ['A6', 'A5', 'A4', 'A3', 'SRA3', 'A2', 'Letter', 'GTO', 'SRA2', 'B2', 'A1', 'B1'];
 
 export const SHEET_LIMITS = { min: 20, max: 2000 };
 

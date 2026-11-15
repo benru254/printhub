@@ -7,7 +7,8 @@ import { toMargins, maxMargin } from '../../core/printers.js';
 export const MARK_LENGTH = 4; // crop mark line length (mm)
 export const MARK_MIN_OFFSET = 2; // gap between trim edge and the start of a mark (mm)
 
-export function computeStepRepeat({ sheetW, sheetH, itemW, itemH, margins, margin, gap, bleed, marks, allowRotate }) {
+// evenCols: keep an even number of columns (work and turn needs a left half and a right half).
+export function computeStepRepeat({ sheetW, sheetH, itemW, itemH, margins, margin, gap, bleed, marks, allowRotate, evenCols = false }) {
   const m = toMargins(margins ?? margin ?? 0);
   const markOffset = Math.max(bleed, MARK_MIN_OFFSET);
   // Space needed around the whole grid: room for crop marks, or at least the bleed.
@@ -21,7 +22,8 @@ export function computeStepRepeat({ sheetW, sheetH, itemW, itemH, margins, margi
 
   let best = null;
   for (const o of options) {
-    const cols = fitCount(availW, o.w, gap);
+    let cols = fitCount(availW, o.w, gap);
+    if (evenCols && cols % 2) cols -= 1;
     const rows = fitCount(availH, o.h, gap);
     const count = cols * rows;
     if (!best || count > best.count) best = { ...o, cols, rows, count };

@@ -1,7 +1,7 @@
 import * as customers from './customers.service.js';
 
 export async function list(req, res) {
-  res.json({ customers: await customers.listCustomers({ q: req.query.q, limit: req.query.limit }) });
+  res.json({ customers: await customers.listCustomers({ q: req.query.q, limit: req.query.limit, filter: req.query.filter }) });
 }
 
 export async function detail(req, res) {
