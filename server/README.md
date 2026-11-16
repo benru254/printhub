@@ -8,47 +8,39 @@ One server for every PrintHub tool:
 
 Stack: Node 20+, Express 5, PostgreSQL, and files kept in a folder (`UPLOAD_DIR`). Every package has an MIT or BSD licence.
 
-## First-time setup (Windows)
+## Run it
 
-1. **Install PostgreSQL 16** from https://www.postgresql.org/download/windows/ (the EDB installer).
-   - Keep port **5432**.
-   - Write down the password you choose for the `postgres` user.
-   - You can skip Stack Builder.
-2. **Create the databases.** Open *SQL Shell (psql)* from the Start menu, press Enter at each prompt, type the `postgres` password, then run:
-   ```sql
-   CREATE USER printhub WITH PASSWORD 'choose-a-strong-password';
-   CREATE DATABASE printhub OWNER printhub;
-   CREATE DATABASE printhub_test OWNER printhub;
-   ```
-3. **Settings.** In `server/`, copy `.env.example` to `.env`, then:
-   - Put your password into `DATABASE_URL` and `TEST_DATABASE_URL`.
-   - Set `JWT_SECRET` to a long random text. You can make one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
-4. Run:
-   ```
-   cd server
-   npm install
-   npm run db:setup     # "Database is ready."
-   npm test             # all pass (uses printhub_test, which it WIPES)
-   npm run dev          # PrintHub API running on http://localhost:5181
-   ```
-5. In a second terminal, start the app:
-   ```
-   cd tools/imposition/digital-printer
-   npm run dev
-   ```
-   Then open `http://localhost:5180/#/staff`. The first visit creates the **admin** account.
+The easy way, for testing on one computer: double-click `start-printhub.bat` in the
+repository root. See [LOCAL-TEST.md](../LOCAL-TEST.md).
 
-## Every day
-- Start the server with `npm run dev` in `server/`. It restarts by itself when files change. After a `git pull` that changed `server/`, stop it (Ctrl+C) and start it again.
-- `npm run dev` in the tool folder serves the app on port 5180 and passes `/api` on to port 5181.
-- Phones on the same Wi-Fi: open `http://<PC-IP>:5180`.
+By hand (PowerShell, in this folder):
+
+```powershell
+npm install
+npm start        # or: npm run dev   (restarts by itself when a file changes)
+```
+
+It prints the address to open. With the app built (`npm run build` in
+`tools/imposition/digital-printer`) the server shows the app too, on the same address.
+
+## Where orders are kept
+
+| `DATABASE_URL` in `.env` | Database | Use it for |
+|---|---|---|
+| no line (or no `.env` file) | built-in (PGlite, real PostgreSQL inside the program), folder `data/db` | testing, one computer |
+| `postgres://user:password@host:5432/printhub` | a PostgreSQL server | a hosted shop |
+
+The SQL is the same for both. `npm run db:setup` creates the PostgreSQL user and databases
+on a computer that has PostgreSQL installed (not needed for the built-in database).
+Every setting is optional: see `.env.example`.
 
 ## Backups (important)
-The orders live in PostgreSQL, and the files live in `server/uploads/`. Back up **both**, at least weekly:
-```
-pg_dump -U printhub -F c printhub > printhub-YYYY-MM-DD.backup
-```
-Also copy the `uploads` folder to another disk or cloud drive.
+
+- Built-in database: stop the server, then copy the folders `data` and `uploads`.
+- PostgreSQL: `pg_dump printhub > printhub-backup.sql` every day, and copy `uploads`.
+  A hosted database usually does the `pg_dump` part for you: switch that on.
+
+Losing these folders loses every order, payment and customer file.
 
 ## API
 | Who | Method & path | What |
@@ -69,6 +61,25 @@ Also copy the `uploads` folder to another disk or cloud drive.
 | staff | `PUT /api/orders/:id/price` (`amount`, `note`) | set the final price (adds a ledger line for the difference) |
 | staff | `POST /api/orders/:id/payments` (`kind` payment/refund, `amount`, `method`, `reference`) | record money in or out |
 | staff | `GET /api/money/summary?from=&to=` | money received (by method) and what customers still owe |
+
+## Part 10 addresses
+
+| Address | Who | What |
+|---|---|---|
+| `POST /api/orders` with `product` = `{ id, choice, speed }` | customer, or staff (counter order) | Order a catalogue product. The server prices it. A file is only needed when `artwork` = `upload` |
+| `GET /api/orders/track/:code?key=` or `?phone=` | customer | One order: status, money, proof, what has happened |
+| `GET /api/orders/track/:code/proof` | customer | The proof file |
+| `POST /api/orders/track/:code/proof` `{ action: approve or change, message }` | customer | Answer the proof |
+| `POST /api/orders/track/:code/paid` `{ text }` | customer | "I have paid": M-Pesa code or the whole message |
+| `POST /api/orders/track/:code/files` | customer | Send the design later, or one more file |
+| `POST /api/orders/track/:code/reorder` `{ quantity }` | customer | Order again |
+| `GET /api/me/orders`, `POST /api/me/login` `{ phone, code }` | customer | All their orders (customer token) |
+| `POST /api/orders/:id/files` with `kind` = `proof` | staff | Send a proof: the order waits for the customer |
+| `POST /api/orders/:id/claims/:claimId` `{ action: confirm or reject }` | staff | Confirm a customer's payment message |
+| `POST /api/orders/:id/reorder` | staff | Order again for a customer |
+| `GET /api/customers?filter=owing` or `quiet` | staff | Who owes, who has gone quiet |
+| `PUT /api/shop` `{ catalogue }` | admin | Change the products |
+| `GET /api/local` | staff | The addresses to open PrintHub from a phone |
 
 ## Money rules
 - `order_ledger` is the only place money lives. Rows are **added, never edited or deleted**. A mistake is fixed with a new row.

@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { formatMoney } from '@engine';
-import { api } from '../lib/api.js';
+import { api, staffToken } from '../lib/api.js';
 import { store } from '../lib/storage.js';
+import { customer, rememberOrder, trackHref, trackUrl as linkFor } from '../lib/customer.js';
+import { waLink } from '../lib/whatsapp.js';
 
 const newKey = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`);
 
@@ -45,10 +47,12 @@ export default function SendOrder({ job, tool, title, quantity, recipe, summary,
       if (form.due) f.append('dueAt', `${form.due}T17:00:00`);
       f.append('clientKey', key.current);
       f.append('file', new Blob([job.bytes], { type: 'application/pdf' }), `${job.name}.pdf`);
-      const r = await api('/orders', { method: 'POST', form: f });
-      store.set('customer', { name: form.name.trim(), phone: form.phone.trim() });
-      const mine = store.get('myOrders', []);
-      if (!mine.some((o) => o.code === r.code)) store.set('myOrders', [{ code: r.code, title, at: new Date().toISOString() }, ...mine].slice(0, 20));
+      const counter = !!staffToken.get(); // staff sending it for a customer at the counter
+      const r = await api('/orders', { method: 'POST', form: f, auth: counter });
+      if (!counter) {
+        customer.set(form);
+        rememberOrder(r, title);
+      }
       key.current = newKey();
       setSent(r);
     } catch (err) {
@@ -66,7 +70,7 @@ export default function SendOrder({ job, tool, title, quantity, recipe, summary,
     );
   }
 
-  const trackUrl = sent ? `${window.location.origin}${window.location.pathname}#/track/${sent.code}` : '';
+  const trackUrl = sent ? linkFor(sent.code, sent.key) : '';
   const shopName = (shop && shop.name) || 'the shop';
 
   return (
@@ -84,11 +88,11 @@ export default function SendOrder({ job, tool, title, quantity, recipe, summary,
             )}
             <p className="hint">Keep this code. The shop will contact you on {form.phone}.</p>
             <div className="dialog-actions">
-              <a className="primary as-link" href={`#/track/${sent.code}`}>Track my order</a>
+              <a className="primary as-link" href={sent.id ? `#/staff/order/${sent.id}` : trackHref(sent.code, sent.key)}>{sent.id ? 'Open the order' : 'Track my order and pay'}</a>
               {shop && shop.whatsapp && (
                 <a
                   className="ghost-btn wide-btn as-btn-link"
-                  href={`https://wa.me/${shop.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(`Hello, I have sent order ${sent.code} (${title}, ${quantity}). `)}`}
+                  href={waLink(shop.whatsapp, `Hello, I have sent order ${sent.code} (${title}, ${quantity}). `)}
                   target="_blank"
                   rel="noreferrer"
                 >

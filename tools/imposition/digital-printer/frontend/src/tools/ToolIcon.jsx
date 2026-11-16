@@ -52,6 +52,13 @@ const ICONS = {
       <path d="M16 4v24M6 16h20" strokeDasharray="2 2" />
     </g>
   ),
+  largeformat: (
+    <g {...S}>
+      <rect x="3" y="8" width="26" height="14" rx="1" />
+      <path d="M12 8v14M21 8v14" strokeDasharray="2 2" />
+      <path d="M8 26h16M8 24v4M24 24v4" />
+    </g>
+  ),
   gang: (
     <g {...S}>
       <rect x="4" y="4" width="14" height="10" rx="1" />

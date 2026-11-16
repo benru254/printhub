@@ -1,6 +1,6 @@
 // Every tool in the imposition app. Add a tool here, give it a folder in
 // frontend/src/tools/<id>/ and engine/tools/<id>/, and it appears on the file screen.
-// status: 'ready' | 'soon'
+// status: 'ready' | 'soon'      pro: true = only shown in Pro (a tool for the shop, not for customers)
 
 export const TOOLS = [
   {
@@ -34,10 +34,11 @@ export const TOOLS = [
     status: 'soon',
   },
   {
-    id: 'poster',
-    name: 'Posters & tiles',
-    desc: 'Print a big poster in parts on smaller sheets.',
-    status: 'soon',
+    id: 'largeformat',
+    name: 'Banners, posters & large prints',
+    desc: 'Scale a design to any size for the roll printer: hems, eyelets, parts to join. Or tile a poster on small sheets.',
+    status: 'ready',
+    pro: true,
   },
   {
     id: 'gang',

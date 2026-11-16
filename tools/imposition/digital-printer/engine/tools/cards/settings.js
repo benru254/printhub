@@ -18,6 +18,9 @@ export const CARD_DEFAULTS = {
   cutter: 'guillotine', // 'guillotine' (straight cuts, cut marks) | 'plotter' (sticker cutter, cut lines)
   contourOffset: 2, // mm of white border around the design (shape 'contour')
   contourIgnoreWhite: true, // white background counts as empty (shape 'contour')
+  // Offset press options (see core/pressMarks.js and plan.js)
+  pressMarks: false, // colour bar and registration marks along the top of the sheet
+  workAndTurn: false, // front and back side by side on ONE plate set; the sheet is turned and printed again
 };
 
 export const STANDARD_BLEED = 3; // mm, the print industry standard

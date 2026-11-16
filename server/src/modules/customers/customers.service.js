@@ -22,26 +22,47 @@ export async function findOrCreateCustomer(db, { name, phone }) {
   );
 }
 
-export async function listCustomers({ q = '', limit = 50 } = {}) {
+const MONEY_SQL = `
+  coalesce((SELECT sum(l.amount_cents) FROM order_ledger l JOIN orders o2 ON o2.id = l.order_id
+             WHERE o2.customer_id = c.id AND o2.status <> 'cancelled' AND l.kind = 'charge'), 0)::float8 / 100 AS "billed",
+  coalesce((SELECT sum(CASE l.kind WHEN 'payment' THEN l.amount_cents WHEN 'refund' THEN -l.amount_cents ELSE 0 END)
+              FROM order_ledger l JOIN orders o2 ON o2.id = l.order_id WHERE o2.customer_id = c.id), 0)::float8 / 100 AS "paid"`;
+
+// filter: 'all' | 'owing' (still to pay) | 'quiet' (2 or more orders, none in the last 45 days:
+// the customers worth a "time to restock?" message).
+export async function listCustomers({ q = '', limit = 100, filter = 'all' } = {}) {
   const like = `%${String(q).trim()}%`;
-  return all(
+  const rows = await all(
     `SELECT c.id, c.name, c.phone, c.created_at AS "createdAt",
-            count(o.id)::int AS orders, max(o.created_at) AS "lastOrderAt"
-       FROM customers c LEFT JOIN orders o ON o.customer_id = c.id
+            count(o.id)::int AS orders, max(o.created_at) AS "lastOrderAt", ${MONEY_SQL}
+       FROM customers c LEFT JOIN orders o ON o.customer_id = c.id AND o.status <> 'cancelled'
       WHERE $1 = '%%' OR c.name ILIKE $1 OR c.phone ILIKE $1
       GROUP BY c.id
       ORDER BY max(o.created_at) DESC NULLS LAST
       LIMIT $2`,
-    [like, Math.min(200, Number(limit) || 50)]
+    [like, Math.min(500, Number(limit) || 100)]
   );
+  const quietBefore = Date.now() - 45 * 86400000;
+  const list = rows.map((r) => ({
+    ...r,
+    owes: Math.max(0, Math.round((r.billed - r.paid) * 100) / 100),
+    quiet: r.orders >= 2 && !!r.lastOrderAt && new Date(r.lastOrderAt).getTime() < quietBefore,
+  }));
+  if (filter === 'owing') return list.filter((c) => c.owes > 0);
+  if (filter === 'quiet') return list.filter((c) => c.quiet);
+  return list;
 }
 
 export async function getCustomer(id) {
-  const c = await get('SELECT id, name, phone, created_at AS "createdAt" FROM customers WHERE id = $1', [id]);
+  const c = await get(`SELECT c.id, c.name, c.phone, c.created_at AS "createdAt", ${MONEY_SQL} FROM customers c WHERE c.id = $1`, [id]);
   if (!c) throw notFound('Customer not found.');
   const orders = await all(
-    `SELECT id, code, tool, title, status, quantity, created_at AS "createdAt" FROM orders WHERE customer_id = $1 ORDER BY created_at DESC`,
+    `SELECT o.id, o.code, o.tool, o.title, o.status, o.quantity, o.created_at AS "createdAt", o.summary->>'detail' AS detail,
+            (SELECT coalesce(sum(amount_cents), 0) FROM order_ledger l WHERE l.order_id = o.id AND l.kind = 'charge')::float8 / 100 AS "total",
+            (SELECT coalesce(sum(CASE kind WHEN 'payment' THEN amount_cents WHEN 'refund' THEN -amount_cents ELSE 0 END), 0)
+               FROM order_ledger l WHERE l.order_id = o.id)::float8 / 100 AS "paid"
+       FROM orders o WHERE o.customer_id = $1 ORDER BY o.created_at DESC`,
     [id]
   );
-  return { ...c, orders };
+  return { ...c, owes: Math.max(0, Math.round((c.billed - c.paid) * 100) / 100), orders };
 }

@@ -1,11 +1,26 @@
-// Shop-wide settings every customer's app reads: shop name, WhatsApp number, the price list
-// and the shop's printers (so customers see the real "how many per sheet", not a guess).
+// Shop-wide settings every customer's app reads: shop name, WhatsApp number, how to pay,
+// the price list, the products (catalogue) and the shop's printers (so customers see the
+// real "how many per sheet", not a guess).
 import { all, transaction } from '../../db.js';
 import { badRequest } from '../../lib/errors.js';
 import { normalizePhone } from '../../lib/phone.js';
 import { DEFAULT_PRICE_LIST, cleanPriceList } from '../../../../tools/imposition/digital-printer/engine/core/pricing.js';
+import { DEFAULT_CATALOGUE, cleanCatalogue } from '../../../../tools/imposition/digital-printer/engine/core/catalogue.js';
+import { cleanClosedDays } from '../../../../tools/imposition/digital-printer/engine/core/workdays.js';
 
-const DEFAULT_SHOP = { name: 'PrintHub', whatsapp: '', turnaroundDays: 2 };
+export const PAY_METHODS = ['none', 'till', 'paybill', 'pochi', 'phone'];
+
+const DEFAULT_SHOP = {
+  name: 'PrintHub',
+  whatsapp: '',
+  turnaroundDays: 2,
+  address: '', // where customers collect
+  hours: '', // e.g. "Mon-Sat 8am-6pm"
+  pin: '', // KRA PIN, printed on receipts
+  closedDays: [0], // 0 = Sunday
+  // How customers pay. method: 'till' (Buy Goods), 'paybill', 'pochi', 'phone' (Send Money) or 'none'.
+  pay: { method: 'none', number: '', account: '', name: '', depositPct: 50 },
+};
 const MAX_JSON = 200 * 1024;
 
 async function readAll(db = { all }) {
@@ -13,19 +28,41 @@ async function readAll(db = { all }) {
   return Object.fromEntries(rows.map((r) => [r.key, r.value]));
 }
 
+const shopFrom = (s) => ({ ...DEFAULT_SHOP, ...(s.shop || {}), pay: { ...DEFAULT_SHOP.pay, ...((s.shop && s.shop.pay) || {}) } });
+
 export async function getPriceList(db) {
   const s = await readAll(db);
   return s.priceList || DEFAULT_PRICE_LIST;
 }
 
-// Public: safe for anyone to read.
-export async function getShop() {
-  const s = await readAll();
+// Everything pricing and ordering need, read once (db = plain helpers or a transaction).
+export async function shopData(db) {
+  const s = await readAll(db);
   return {
-    shop: { ...DEFAULT_SHOP, ...(s.shop || {}) },
+    shop: shopFrom(s),
     priceList: s.priceList || DEFAULT_PRICE_LIST,
+    catalogue: s.catalogue || DEFAULT_CATALOGUE,
     printers: (s.printers && s.printers.printers) || [],
     customSheets: (s.printers && s.printers.customSheets) || [],
+  };
+}
+
+// Public: safe for anyone to read.
+export function getShop() {
+  return shopData();
+}
+
+function cleanPay(input = {}) {
+  const method = PAY_METHODS.includes(input.method) ? input.method : 'none';
+  const number = String(input.number || '').replace(/\D/g, '').slice(0, 13);
+  if (method !== 'none' && number.length < 5) throw badRequest('Enter the number customers pay to.');
+  const pct = Math.round(Number(input.depositPct));
+  return {
+    method,
+    number,
+    account: String(input.account || '').trim().slice(0, 20),
+    name: String(input.name || '').trim().slice(0, 40),
+    depositPct: Number.isFinite(pct) ? Math.min(100, Math.max(0, pct)) : DEFAULT_SHOP.pay.depositPct,
   };
 }
 
@@ -36,7 +73,16 @@ function cleanShop(input) {
   const whatsapp = raw ? normalizePhone(raw) : '';
   if (raw && !whatsapp) throw badRequest('The WhatsApp number is not a valid phone number.');
   const days = Math.max(0, Math.min(60, Math.round(Number(input.turnaroundDays))));
-  return { name, whatsapp, turnaroundDays: Number.isFinite(days) ? days : DEFAULT_SHOP.turnaroundDays };
+  return {
+    name,
+    whatsapp,
+    turnaroundDays: Number.isFinite(days) ? days : DEFAULT_SHOP.turnaroundDays,
+    address: String(input.address || '').trim().slice(0, 120),
+    hours: String(input.hours || '').trim().slice(0, 80),
+    pin: String(input.pin || '').trim().toUpperCase().slice(0, 20),
+    closedDays: cleanClosedDays(input.closedDays, DEFAULT_SHOP.closedDays),
+    pay: cleanPay(input.pay),
+  };
 }
 
 function cleanPrinters(input) {
@@ -50,16 +96,23 @@ function cleanPrinters(input) {
   return { printers: printers.slice(0, 20), customSheets: customSheets.slice(0, 40) };
 }
 
-// Admin: patch = { shop?, priceList?, printers? }. Every change is written to staff_events.
+// The engine's checks throw plain errors with a message for the shop owner.
+function checked(fn) {
+  try {
+    return fn();
+  } catch (e) {
+    throw badRequest(e.message);
+  }
+}
+
+// Admin: patch = { shop?, priceList?, catalogue?, printers? }. Every change is written to staff_events.
 export async function updateShop(staffId, patch = {}) {
   const changes = {};
   if (patch.shop !== undefined) changes.shop = cleanShop(patch.shop);
-  if (patch.priceList !== undefined) {
-    try {
-      changes.priceList = cleanPriceList(patch.priceList);
-    } catch (e) {
-      throw badRequest(e.message);
-    }
+  if (patch.priceList !== undefined) changes.priceList = checked(() => cleanPriceList(patch.priceList));
+  if (patch.catalogue !== undefined) {
+    if (JSON.stringify(patch.catalogue).length > MAX_JSON) throw badRequest('The product list is too big.');
+    changes.catalogue = checked(() => cleanCatalogue(patch.catalogue));
   }
   if (patch.printers !== undefined) changes.printers = cleanPrinters(patch.printers);
   if (!Object.keys(changes).length) throw badRequest('Nothing to save.');

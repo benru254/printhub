@@ -46,5 +46,12 @@ jobs:
       # The server prices orders with the app's pricing module, which has no packages of its own.
       - run: npm ci
         working-directory: server
-      - run: npm test
+      - name: API tests on PostgreSQL
+        run: npm test
         working-directory: server
+      # The same tests on the built-in database (what a shop uses when it has no PostgreSQL).
+      - name: API tests on the built-in database
+        run: npm test
+        working-directory: server
+        env:
+          TEST_DATABASE_URL: memory

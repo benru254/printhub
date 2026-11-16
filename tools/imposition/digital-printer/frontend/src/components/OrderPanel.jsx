@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { quotePrice, formatMoney, findPaper, DEFAULT_OPTIONS } from '@engine';
-import { api } from '../lib/api.js';
 import SendOrder from './SendOrder.jsx';
+import OrderOutputs from './OrderOutputs.jsx';
 
 const LAMINATE = [
   { value: 'none', label: 'None' },
@@ -11,7 +11,7 @@ const LAMINATE = [
 
 // Paper + finish + live price, then "Send to the shop".
 // When the job was opened from an order (ctx.order), the operator instead gets
-// "Save print-ready PDF to the order" — no downloading and uploading by hand.
+// "Save print-ready PDF to the order" and "Send a proof" (see OrderOutputs.jsx).
 //   spec    = what the job needs (see engine/core/pricing.js)
 //   outputs = [{ kind: 'imposed', label, build: async () => ({ bytes, name }) }]
 export default function OrderPanel({ ctx, job, tool, title, quantity, recipe, summary, spec, defaultPaper, outputs = [], initial, disabled }) {
@@ -23,30 +23,9 @@ export default function OrderPanel({ ctx, job, tool, title, quantity, recipe, su
   const used = { ...options, paper: paper ? paper.id : null };
   const quote = useMemo(() => quotePrice(spec, used, priceList), [JSON.stringify(spec), JSON.stringify(used), priceList]); // eslint-disable-line react-hooks/exhaustive-deps
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState('');
-  const [saved, setSaved] = useState('');
-  const [error, setError] = useState('');
   const set = (patch) => setOptions((o) => ({ ...o, ...patch }));
   const papers = priceList.papers.filter((p) => !!p.sticker === sticker);
   const order = ctx.order;
-
-  async function saveToOrder(out) {
-    setSaving(out.kind + out.label);
-    setError('');
-    setSaved('');
-    try {
-      const { bytes, name } = await out.build();
-      const f = new FormData();
-      f.append('kind', out.kind);
-      f.append('file', new Blob([bytes], { type: 'application/pdf' }), name);
-      await api(`/orders/${order.id}/files`, { method: 'POST', auth: true, form: f });
-      setSaved(`${out.label[0].toUpperCase()}${out.label.slice(1)} saved to order ${order.code}.`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setSaving('');
-    }
-  }
 
   return (
     <div className="card price-card">
@@ -99,15 +78,7 @@ export default function OrderPanel({ ctx, job, tool, title, quantity, recipe, su
       )}
 
       {order ? (
-        <div className="dialog-actions">
-          {outputs.map((out) => (
-            <button key={out.kind + out.label} type="button" className="primary" disabled={disabled || !!saving} onClick={() => saveToOrder(out)}>
-              {saving === out.kind + out.label ? 'Saving…' : `Save ${out.label} to order ${order.code}`}
-            </button>
-          ))}
-          {saved && <p className="ok-text">{saved} <a className="as-link" href={`#/staff/order/${order.id}`}>Back to the order</a></p>}
-          {error && <p className="error">{error}</p>}
-        </div>
+        <OrderOutputs order={order} job={job} outputs={outputs} disabled={disabled} shopName={ctx.shop.shop.name} />
       ) : (
         <div className="dialog-actions">
           <SendOrder

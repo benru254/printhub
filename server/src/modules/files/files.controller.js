@@ -1,13 +1,13 @@
 // Staff: add a file to an order, and download any file of an order.
 import { addFile } from '../orders/orders.service.js';
-import { acceptUpload, discardUpload, getFileForDownload, FILE_KINDS } from './files.service.js';
+import { acceptUpload, discardUpload, getFileForDownload, STAFF_FILE_KINDS } from './files.service.js';
 import { badRequest } from '../../lib/errors.js';
 
 export async function uploadFile(req, res) {
   let info = null;
   try {
     const kind = (req.body || {}).kind || 'operator';
-    if (!FILE_KINDS.includes(kind) || kind === 'original') throw badRequest('Staff can add "operator" or "imposed" files.');
+    if (!STAFF_FILE_KINDS.includes(kind)) throw badRequest('Staff can add a fixed design, a print-ready file, a proof or a reference file.');
     info = await acceptUpload(req.file);
     res.status(201).json({ order: await addFile(req.staff.id, Number(req.params.id), kind, info) });
   } catch (e) {

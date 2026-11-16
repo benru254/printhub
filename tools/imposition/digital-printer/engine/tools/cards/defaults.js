@@ -16,6 +16,8 @@ export function cardStartState(printer, saved) {
     ...CARD_DEFAULTS,
     sheet: printer.defaultSheet,
     orientation: printer.orientation,
+    pressMarks: !!printer.press,
+    workAndTurn: !!printer.press,
   };
   let overrides = {};
   if (saved) {
@@ -31,6 +33,8 @@ export function cardStartState(printer, saved) {
     if (typeof saved.contourIgnoreWhite === 'boolean') base.contourIgnoreWhite = saved.contourIgnoreWhite;
     if (saved.radius >= 0) base.radius = saved.radius;
     if (['guillotine', 'plotter'].includes(saved.cutter)) base.cutter = saved.cutter;
+    if (typeof saved.pressMarks === 'boolean') base.pressMarks = saved.pressMarks;
+    if (typeof saved.workAndTurn === 'boolean') base.workAndTurn = saved.workAndTurn;
     overrides = { ...(saved.overrides || {}) };
   }
   return { base, overrides };
@@ -49,6 +53,8 @@ export function makeSavedDefault(base, overrides) {
     cutter: base.cutter,
     contourOffset: base.contourOffset,
     contourIgnoreWhite: base.contourIgnoreWhite,
+    pressMarks: !!base.pressMarks,
+    workAndTurn: !!base.workAndTurn,
     overrides: { ...overrides },
   };
 }

@@ -6,3 +6,4 @@ export const moneyRoutes = Router();
 moneyRoutes.get('/money/summary', requireStaff, c.summary);
 moneyRoutes.put('/orders/:id/price', requireStaff, c.setPrice);
 moneyRoutes.post('/orders/:id/payments', requireStaff, c.addMoney);
+moneyRoutes.post('/orders/:id/claims/:claimId', requireStaff, c.decideClaim);
